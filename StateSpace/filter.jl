@@ -55,7 +55,7 @@ function error_var!(F_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatrix,
     # ZｘPₜｘZ'
 	mul!(F_t, Z, tmp)
 	# Fₜ = ZｘPₜｘZ' + H
-	F_t.+= H
+	@. F_t+= H
 	
 	return nothing
 end
@@ -68,7 +68,7 @@ function error_var!(F_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatrix,
 	mul!(F_t, Z, tmp)
 	# Fₜ = ZｘPₜｘZ' + H
 	@inbounds @fastmath for i in axes(H,1) 
-		F_t[i,i]+= H[i,i]
+		F_t[i,i]+= H.diag[i]
 	end
 	
 	return nothing
@@ -113,7 +113,7 @@ function error_prec!(Fi_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatri
 end
 
 function error_prec!(Fi_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatrix, 
-					Hi::AbstractMatrix, tmp_np::AbstractMatrix, tmp_pn::AbstractMatrix, 
+					Hi::Diagonal, tmp_np::AbstractMatrix, tmp_pn::AbstractMatrix, 
 					tmp_p::AbstractMatrix)
 	# Pₜ⁻¹
 	inInv!(Pi, P_t)
@@ -129,7 +129,7 @@ function error_prec!(Fi_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatri
 	mul!(Fi_t, tmp_np, tmp_pn, -1., .0)
 	# Fₜ⁻¹ = H⁻¹ - H⁻¹×Z×(Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹×Z'×H⁻¹
 	@inbounds @fastmath for i in axes(Hi,1)
-		Fi_t[i,i]+= Hi[i,i]
+		Fi_t[i,i]+= Hi.diag[i]
 	end
 	
 	return nothing
@@ -245,7 +245,7 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 	mul!(P_p, K_t, Z, -1., .0)
 	# T - KₜｘZ
 	@inbounds @fastmath for i in axes(T,1)
-		P_p[i,i]+= T[i,i]
+		P_p[i,i]+= T.diag[i]
 	end
     # Pₜｘ(T - KₜｘZ)'
 	BLAS.gemm!('N', 'T', 1., P_t, P_p, .0, tmp)
@@ -270,7 +270,7 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 	mul!(P_p, T, tmp)
 	# TｘPₜｘ(T - KₜｘZ)' + Q
 	@inbounds @fastmath for i in axes(Q,1)
-		P_p[i,i]+= Q[i,i]
+		P_p[i,i]+= Q.diag[i]
 	end
 	
 	return nothing
@@ -283,7 +283,7 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 	mul!(P_p, K_t, Z, -1., .0)
 	# T - KₜｘZ
 	@inbounds @fastmath for i in axes(T,1)
-		P_p[i,i]+= T[i,i]
+		P_p[i,i]+= T.diag[i]
 	end
     # Pₜｘ(T - KₜｘZ)'
 	BLAS.gemm!('N', 'T', 1., P_t, P_p, .0, tmp)
@@ -291,7 +291,7 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 	mul!(P_p, T, tmp)
 	# TｘPₜｘ(T - KₜｘZ)' + Q
 	@inbounds @fastmath for i in axes(Q,1)
-		P_p[i,i]+= Q[i,i]
+		P_p[i,i]+= Q.diag[i]
 	end
 	
 	return nothing
@@ -311,7 +311,7 @@ univariate treatment, storing the result in `a_f` and `P_f`.
   - `F::Real`				: forecast error variance for series ``i``
 
 #### Returns
-  - `a_f::AbstractVector`	: predicted state at  ``t+1`` (p x 1)
+  - `a_f::AbstractVector`	: predicted state at ``t+1`` (p x 1)
   - `P_f::AbstractMatrix`	: predicted states variance at time ``t+1`` (p x p)
 """
 function forward_eq!(a_f::AbstractVector, P_f::AbstractMatrix, a_i::AbstractVector, 
@@ -371,7 +371,7 @@ function predict_eq!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVect
 	mul!(P_p, T, tmp)
 	# Pₜ₊₁ = TｘPₜｘT' + Q
 	@inbounds @fastmath for i in axes(Q,1)
-		P_p[i,i]+= Q[i,i]
+		P_p[i,i]+= Q.diag[i]
 	end
 	
 	return nothing
@@ -384,7 +384,7 @@ function predict_eq!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVect
 	@. a_p= T.diag*a_t
 
 	# Predict states variance
-	@. P_p+= T.diag*P_t*transpose(T.diag) + mat.Q
+	@. P_p= T.diag*P_t*transpose(T.diag) + mat.Q
 	
 	return nothing
 end
@@ -714,7 +714,7 @@ function kalmanfilter_eq(Y::AbstractMatrix, mat::SysMat)
 			P_it= view(f.P,:,:,i,t)
 			P_f= view(f.P,:,:,i+1,t)
 	        K_it= view(f.K,:,i,t)
-			Z_i= view(Zt,:,1)
+			Z_i= view(Zt,:,i)
 		
 			# Forecast error
 			f.v[i,t]= Y[i,t] - dot(Z_i, a_it)
@@ -727,15 +727,18 @@ function kalmanfilter_eq(Y::AbstractMatrix, mat::SysMat)
 		
 			# Move states and variances forward
 			forward_eq!(a_f, P_f, a_it, P_it, K_it, f.v[i,t], f.F[i,t])
+		end
+		
+		if t < T_len
+			# Store views
+			a_f= view(f.a,:,n+1,t)
+			P_f= view(f.P,:,:,n+1,t)
+	        a_p= view(f.a,:,1,t+1)
+			P_p= view(f.P,:,:,1,t+1)
 			
-			if i == n && t < T_len
-				# Store views
-		        a_p= view(f.a,:,1,t+1)
-				P_p= view(f.P,:,:,1,t+1)
-				
-				# Predict states and variances
-				predict_eq!(a_p, P_p, a_f, P_f, mat.T, mat,Q, tmp_p)
-			end
+			# Predict states and variances
+			predict_eq!(a_p, P_p, a_f, P_f, mat.T, mat,Q, tmp_p)
+		end
 	end
 	
 	return f
@@ -772,7 +775,7 @@ function kalmanfilter_eq!(f::Filter, Y::AbstractMatrix, mat::SysMat)
 			P_it= view(f.P,:,:,i,t)
 			P_f= view(f.P,:,:,i+1,t)
 	        K_it= view(f.K,:,i,t)
-			Z_i= view(Zt,:,1)
+			Z_i= view(Zt,:,i)
 		
 			# Forecast error
 			f.v[i,t]= Y[i,t] - dot(Z_i, a_it)
@@ -785,15 +788,18 @@ function kalmanfilter_eq!(f::Filter, Y::AbstractMatrix, mat::SysMat)
 		
 			# Move states and variances forward
 			forward_eq!(a_f, P_f, a_it, P_it, K_it, f.v[i,t], f.F[i,t])
+		end
+		
+		if t < T_len
+			# Store views
+			a_f= view(f.a,:,n+1,t)
+			P_f= view(f.P,:,:,n+1,t)
+	        a_p= view(f.a,:,1,t+1)
+			P_p= view(f.P,:,:,1,t+1)
 			
-			if i == n && t < T_len
-				# Store views
-		        a_p= view(f.a,:,1,t+1)
-				P_p= view(f.P,:,:,1,t+1)
-				
-				# Predict states and variances
-				predict_eq!(a_p, P_p, a_f, P_f, mat.T, mat,Q, tmp_p)
-			end
+			# Predict states and variances
+			predict_eq!(a_p, P_p, a_f, P_f, mat.T, mat,Q, tmp_p)
+		end
 	end
 	
 	return nothing
