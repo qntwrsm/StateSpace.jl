@@ -86,7 +86,7 @@ function loglik(f::FilterWb)
 		fac= cholesky!(tmp)
 		
 		# log|Fₜ⁻¹|
-       	ll+= logdet(fac)
+       	ll+= logdet(faca)
     end
 
     return .5*ll
