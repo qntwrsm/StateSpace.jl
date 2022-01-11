@@ -8,9 +8,6 @@ loglik.jl
 @date: 2020/07/29
 =#
 
-# Include numerical helper routines
-include("../misc/num.jl")
-
 """
 	loglik(f)
 	
@@ -48,7 +45,7 @@ function loglik(f::Filter)
 		# vₜ'ｘFₜ⁻¹ｘvₜ
 		ll-= dot(v_t, tmp_n)
 		# log|Fₜ|
-       	ll-= inLogDet!(F_t)
+       	ll-= logdet(fac)
     end
 
     return .5*ll
@@ -89,7 +86,7 @@ function loglik(f::FilterWb)
 		fac= cholesky!(tmp)
 		
 		# log|Fₜ⁻¹|
-       	ll+= logdet(Fi_t)
+       	ll+= logdet(fac)
     end
 
     return .5*ll
