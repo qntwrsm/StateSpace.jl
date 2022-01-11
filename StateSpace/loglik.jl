@@ -38,14 +38,15 @@ function loglik(f::Filter)
 		
 		# Cholesky factorization of Fₜ
 		copyto!(tmp_nn, F_t)
-		fac= cholesky!(tmp_nn)
+		C= cholesky!(tmp_nn)
+		
+		# log|Fₜ|
+       	ll-= logdet(C)
 		
 		# Fₜ⁻¹ｘvₜ
-        ldiv!(tmp_n, fac, v_t)
+        ldiv!(tmp_n, C, v_t)
 		# vₜ'ｘFₜ⁻¹ｘvₜ
 		ll-= dot(v_t, tmp_n)
-		# log|Fₜ|
-       	ll-= logdet(fac)
     end
 
     return .5*ll
@@ -81,12 +82,9 @@ function loglik(f::FilterWb)
 		# vₜ'ｘFₜ⁻¹ｘvₜ
 		ll-= dot(v_t, Fi_t, v_t)
 		
-		# Cholesky factorization of Fₜ⁻¹
-		copyto!(tmp, Fi_t)
-		fac= cholesky!(tmp)
-		
 		# log|Fₜ⁻¹|
-       	ll+= logdet(faca)
+		copyto!(tmp, Fi_t)
+       	ll+= logdet(cholesky!(tmp))
     end
 
     return .5*ll

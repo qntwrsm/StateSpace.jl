@@ -8,9 +8,6 @@ filter.jl
 @date: 2020/07/28
 =#
 
-# Include numerical helper routines
-include("../misc/num.jl")
-
 """
 	error!(v_t, y, Z, a_t)
 	
@@ -51,7 +48,7 @@ Compute forecast error variance ``F`` at time ``t``, storing the result in
 function error_var!(F_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatrix, 
 					H::AbstractMatrix, tmp::AbstractMatrix)
     # PₜｘZ'
-    BLAS.gemm!('N', 'T', 1., P_t, Z, .0, tmp)
+	mul!(tmp, P_t, transpose(Z))
     # ZｘPₜｘZ'
 	mul!(F_t, Z, tmp)
 	# Fₜ = ZｘPₜｘZ' + H
@@ -63,7 +60,7 @@ end
 function error_var!(F_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatrix, 
 					H::Diagonal, tmp::AbstractMatrix)	
     # PₜｘZ'
-    BLAS.gemm!('N', 'T', 1., P_t, Z, .0, tmp)
+	mul!(tmp, P_t, transpose(Z))
     # ZｘPₜｘZ'
 	mul!(F_t, Z, tmp)
 	# Fₜ = ZｘPₜｘZ' + H
@@ -95,15 +92,16 @@ function error_prec!(Fi_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatri
 					Hi::AbstractMatrix, tmp_np::AbstractMatrix, tmp_pn::AbstractMatrix, 
 					tmp_p::AbstractMatrix)
 	# Pₜ⁻¹
-	inInv!(Pi, P_t)
+	copyto!(tmp_p, P_t)
+	LinearAlgebra.inv!(cholesky!(tmp_p))
 	# H⁻¹×Z
 	mul!(tmp_np, Hi, Z)
 	# Pₜ⁻¹ + Z'×H⁻¹×Z
-	BLAS.gemm!('T', 'N', 1., Z, tmp_np, 1., Pi)
+	mul!(tmp_p, transpose(Z), tmp_np, 1., 1.)
 	# (Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹
-	inInv!(tmp_p, Pi)
+	LinearAlgebra.inv!(cholesky!(tmp_p))
 	# (Pₜ⁻¹ + Z′×H⁻¹×Z)⁻¹×Z′×H⁻¹
-	BLAS.gemm!('N', 'T', 1., tmp_p, HiZ, .0, tmp_pn)
+	mul!(tmp_pn, tmp_p, transpose(HiZ))
 	# -H⁻¹×Z×(Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹×Z'×H⁻¹
 	mul!(Fi_t, tmp_np, tmp_pn, -1., .0)
 	# Fₜ⁻¹ = H⁻¹ - H⁻¹×Z×(Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹×Z'×H⁻¹
@@ -116,15 +114,18 @@ function error_prec!(Fi_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatri
 					Hi::Diagonal, tmp_np::AbstractMatrix, tmp_pn::AbstractMatrix, 
 					tmp_p::AbstractMatrix)
 	# Pₜ⁻¹
-	inInv!(Pi, P_t)
+	copyto!(tmp_p, P_t)
+	C= cholesky!(tmp_p)		# pointer(C.factors) = pointer(tmp_p)
+	LinearAlgebra.inv!(C)
 	# H⁻¹×Z
 	mul!(tmp_np, Hi, Z)
 	# Pₜ⁻¹ + Z'×H⁻¹×Z
-	BLAS.gemm!('T', 'N', 1., Z, tmp_np, 1., Pi)
+	mul!(Pi, transpose(Z), tmp_np, 1., 1.)
 	# (Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹
-	inInv!(tmp_p, Pi)
+	C= cholesky!(tmp_p)		# pointer(C.factors) = pointer(tmp_p)
+	LinearAlgebra.inv!(C)
 	# (Pₜ⁻¹ + Z′×H⁻¹×Z)⁻¹×Z′×H⁻¹
-	BLAS.gemm!('N', 'T', 1., tmp_p, HiZ, .0, tmp_pn)
+	mul!(tmp_pn, tmp_p, transpose(HiZ))
 	# -H⁻¹×Z×(Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹×Z'×H⁻¹
 	mul!(Fi_t, tmp_np, tmp_pn, -1., .0)
 	# Fₜ⁻¹ = H⁻¹ - H⁻¹×Z×(Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹×Z'×H⁻¹
@@ -154,7 +155,7 @@ the result in `K_t`.
 function gain!(K_t::AbstractMatrix, P_t::AbstractMatrix, Fi_t::AbstractMatrix, 
 				Z::AbstractMatrix, T::AbstractMatrix, tmp::AbstractMatrix)
     # PₜｘZ'
-    BLAS.gemm!('N', 'T', 1., P_t, Z, .0, K_t)
+	mul!(K_t, P_t, tranpose(Z))
     # PₜｘZ'ｘFₜ⁻¹
 	mul!(tmp, K_t, Fi_t)
 	# Kₜ = TｘPₜｘZ'ｘFₜ⁻¹
@@ -164,7 +165,7 @@ function gain!(K_t::AbstractMatrix, P_t::AbstractMatrix, Fi_t::AbstractMatrix,
 end
 
 """
-	gain!(K_t, P_t, fac::Factorization, Z, T, tmp)
+	gain!(K_t, P_t, fac, Z, T, tmp)
 	
 Compute Kalman gain ``K`` at time ``t`` using the factorization of ``F``, storing
 the result in `K_t`.
@@ -172,7 +173,7 @@ the result in `K_t`.
 function gain!(K_t::AbstractMatrix, P_t::AbstractMatrix, fac::Factorization, 
 				Z::AbstractMatrix, T::AbstractMatrix, tmp::AbstractMatrix)
     # PₜｘZ'
-    BLAS.gemm!('N', 'T', 1., P_t, Z, .0, tmp)
+	mul!(K_t, P_t, tranpose(Z))
     # PₜｘZ'ｘFₜ⁻¹
 	rdiv!(tmp, fac)
 	# Kₜ = TｘPₜｘZ'ｘFₜ⁻¹
@@ -229,7 +230,7 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 	# T - KₜｘZ
 	@. P_p+= T
     # Pₜｘ(T - KₜｘZ)'
-	BLAS.gemm!('N', 'T', 1., P_t, P_p, .0, tmp)
+	mul!(tmp, P_t, transpose(P_p))
 	# TｘPₜｘ(T - KₜｘZ)'
 	mul!(P_p, T, tmp)
 	# TｘPₜｘ(T - KₜｘZ)' + Q
@@ -248,7 +249,7 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 		P_p[i,i]+= T.diag[i]
 	end
     # Pₜｘ(T - KₜｘZ)'
-	BLAS.gemm!('N', 'T', 1., P_t, P_p, .0, tmp)
+	mul!(tmp, P_t, transpose(P_p))
 	# TｘPₜｘ(T - KₜｘZ)'
 	mul!(P_p, T, tmp)
 	# TｘPₜｘ(T - KₜｘZ)' + Q
@@ -265,7 +266,7 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 	# T - KₜｘZ
 	@. P_p+= T
     # Pₜｘ(T - KₜｘZ)'
-	BLAS.gemm!('N', 'T', 1., P_t, P_p, .0, tmp)
+	mul!(tmp, P_t, transpose(P_p))
 	# TｘPₜｘ(T - KₜｘZ)'
 	mul!(P_p, T, tmp)
 	# TｘPₜｘ(T - KₜｘZ)' + Q
@@ -286,7 +287,7 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 		P_p[i,i]+= T.diag[i]
 	end
     # Pₜｘ(T - KₜｘZ)'
-	BLAS.gemm!('N', 'T', 1., P_t, P_p, .0, tmp)
+	mul!(tmp, P_t, transpose(P_p))
 	# TｘPₜｘ(T - KₜｘZ)'
 	mul!(P_p, T, tmp)
 	# TｘPₜｘ(T - KₜｘZ)' + Q
@@ -349,7 +350,7 @@ function predict_eq!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVect
 
 	# Predict states variance
 	# PₜｘT'
-	BLAS.gemm!('N', 'T', 1., P_t, T, .0, tmp)
+	mul!(tmp, P_t, transpose(T))
 	# TｘPₜｘT'
 	mul!(P_p, T, tmp)
 	# Pₜ₊₁ = TｘPₜｘT' + Q
@@ -366,7 +367,7 @@ function predict_eq!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVect
 
 	# Predict states variance
 	# PₜｘT'
-	BLAS.gemm!('N', 'T', 1., P_t, T, .0, tmp)
+	mul!(tmp, P_t, transpose(T))
 	# TｘPₜｘT'
 	mul!(P_p, T, tmp)
 	# Pₜ₊₁ = TｘPₜｘT' + Q
@@ -559,11 +560,11 @@ function kalmanfilter_wb(Y::AbstractMatrix, mat::SysMat)
 	f= FilterWb(a,P,v,Fi,K)
 	
 	# Inverse of H
-	Hi= similar(mat.H)
+	Hi= copy(mat.H)
 	if isa(mat.H, Diagonal)
 		@. Hi.diag= inv(mat.H.diag)
 	else
-		inInv!(Hi, mat.H)
+		LinearAlgebra.inv!(cholesky!(Hi))
 	end
 	
 	# Initialize filter
@@ -622,11 +623,11 @@ function kalmanfilter_wb!(f::FilterWb, Y::AbstractMatrix, mat::SysMat)
     tmp_p= Matrix{Float64}(undef, (p,p))
 	
 	# Inverse of H
-	Hi= similar(mat.H)
+	Hi= copy(mat.H)
 	if isa(mat.H, Diagonal)
 		@. Hi.diag= inv(mat.H.diag)
 	else
-		inInv!(Hi, mat.H)
+		LinearAlgebra.inv!(cholesky!(Hi))
 	end
 	
 	# Initialize filter

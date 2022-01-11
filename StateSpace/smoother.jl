@@ -56,7 +56,7 @@ Compute the ``L`` matrix at time ``t`` for series ``i``, storing the result in
 """
 function computeL_eq!(L_it::AbstractMatrix, K_it::AbstractVector, Z_i::AbstractVector)
 	# -KₜᵢｘZᵢ'
-	@. L_it= -x*transpose(y)
+	@. L_it= -K_it*transpose(Z_i)
 	# Lₜᵢ = I - KₜᵢｘZᵢ'
 	@inbounds @fastmath for i in axes(L_it,1)
 		L_it[i,i]+= 1.
@@ -86,11 +86,11 @@ function back_state!(r::AbstractVector, L_t::AbstractMatrix, Fi_t::AbstractMatri
 					v_t::AbstractVector, Z::AbstractMatrix, tmp_n::AbstractVector, 
 					tmp_p::AbstractVector)
 	# Lₜ'ｘrₜ
-	BLAS.gemv!('T', 1., L_t, r, .0, tmp_p)
+	mul!(tmp_p, transpose(L_t), r)
 	# Fₜ⁻¹ｘvₜ
 	mul!(tmp_n, Fi_t, v_t)
 	# Z'ｘFₜ⁻¹ｘvₜ
-	BLAS.gemv!('T', 1., Z, tmp_n, .0, r)
+	mul!(r, transpose(Z), tmp_n)
 	# rₜ₋₁ = Z'ｘFₜ⁻¹ｘvₜ + Lₜ'ｘrₜ
 	@. r+= tmp_p
 	
@@ -107,11 +107,11 @@ function back_state!(r::AbstractVector, L_t::AbstractMatrix, fac::Factorization,
 					v_t::AbstractVector, Z::AbstractMatrix, tmp_n::AbstractVector, 
 					tmp_p::AbstractVector)
 	# Lₜ'ｘrₜ
-	BLAS.gemv!('T', 1., L_t, r, .0, tmp_p)
+	mul!(tmp_p, transpose(L_t), r)
 	# Fₜ⁻¹ｘvₜ
 	ldiv!(tmp_n, fac, v_t)
 	# Z'ｘFₜ⁻¹ｘvₜ
-	BLAS.gemv!('T', 1., Z, tmp_n, .0, r)
+	mul!(r, transpose(Z), tmp_n)
 	# rₜ₋₁ = Z'ｘFₜ⁻¹ｘvₜ + Lₜ'ｘrₜ
 	@. r+= tmp_p
 	
@@ -137,7 +137,7 @@ series ``i-1`` using univariate treatment, storing the result in `r`.
 function back_state_eq!(r::AbstractVector, L_i::AbstractMatrix, F::Real, v::Real, 
 						Z_i::AbstractVector, tmp_p::AbstractVector)
 	# Lᵢ'ｘrᵢ
-	BLAS.gemv!('T', 1., L_t, r, .0, tmp_p)
+	mul!(tmp_p, transpose(L_t), r)
 	# rᵢ₋₁ = Zᵢ'ｘF⁻¹ｘv + Lₜ'ｘrᵢ
 	@. r= inv(F)*v*Z_i + tmp_p
 	
@@ -165,11 +165,11 @@ function back_state_var!(N::AbstractMatrix, L_t::AbstractMatrix, Fi_t::AbstractM
 	# NₜｘLₜ
 	mul!(tmp_pp, N, L_t)
 	# LₜｘNₜｘLₜ
-	BLAS.gemm!('T', 'N', 1., L_t, tmp_pp, .0, N)
+	mul!(N, transpose(L_t), tmp_pp)
 	# Fₜ⁻¹ｘZ
 	mul!(tmp_np, Fi_t, Z)
 	# Nₜ₋₁ = Z'ｘFₜ⁻¹ｘZ + LₜｘNₜｘLₜ
-	BLAS.gemm!('T', 'N', 1., Z, tmp_np, 1., N)
+	mul!(N, transpose(Z), tmp_np, 1., 1.)
 	
 	return nothing
 end
@@ -185,11 +185,11 @@ function back_state_var!(N::AbstractMatrix, L_t::AbstractMatrix, fac::Factorizat
 	# NₜｘLₜ
 	mul!(tmp_p, N, L_t)
 	# LₜｘNₜｘLₜ
-	BLAS.gemm!('T', 'N', 1., L_t, tmp_p, .0, N)
+	mul!(N, transpose(L_t), tmp_pp)
 	# Fₜ⁻¹ｘZ
 	ldiv!(tmp_np, fac, Z)
 	# Nₜ₋₁ = Z'ｘFₜ⁻¹ｘZ + LₜｘNₜｘLₜ
-	BLAS.gemm!('T', 'N', 1., Z, tmp_np, 1., N)
+	mul!(N, transpose(Z), tmp_np, 1., 1.)
 	
 	return nothing
 end
@@ -215,7 +215,7 @@ function back_state_var_eq!(N::AbstractMatrix, L_i::AbstractMatrix, F::Real,
 	# NᵢｘLᵢ
 	mul!(tmp_pp, N, L_i)
 	# LᵢｘNᵢｘLᵢ
-	BLAS.gemm!('T', 'N', 1., L_i, tmp_pp, .0, N)
+	mul!(N, transpose(L_i), tmp_pp)
 	# Nᵢ₋₁ = Zᵢ'ｘF⁻¹ｘZᵢ + LᵢｘNᵢｘLᵢ
 	@. N+= inv(F)*Z_i*transpose(Z_i)
 	
@@ -275,7 +275,7 @@ Kalman smoother. Storing the results in `X`.
 """
 function transition2!(X::AbstractMatrix, T::AbstractMatrix, tmp::AbstractMatrix)	
 	# T'ｘXₜ
-	BLAS.gemm!('T', 'N', 1., T, X, .0, tmp)
+	mul!(tmp, transpose(T), X)
 	# Xₜ₋₁ = T'ｘXₜｘT
 	mul!(X, tmp, T)
 	
