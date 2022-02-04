@@ -35,35 +35,36 @@ export
 	loglik,
 	loglik_eq
 	
-# Types
+# Structs
+# Kalman filter
 struct Filter{Aa<:AbstractArray, AP<:AbstractArray, AF<:AbstractArray}
-	a::Aa
-	P::AP
-	v::Matrix{Float64}
-	F::AF
-	K::Array{Float64,3}
+	a::Aa				# filtered state
+	P::AP				# filtered state variance
+	v::Matrix{Float64}  # forecast error
+	F::AF				# forecast error variance
+	K::Array{Float64,3}	# Kalman gain
 end
-
+# Kalman filter based on Woodbury Identity
 struct FilterWb{Aa<:AbstractArray, AP<:AbstractArray, AF<:AbstractArray}
-	a::Aa
-	P::AP
-	v::Matrix{Float64}
-	Fi::AF
-	K::Array{Float64,3}
+	a::Aa				# filtered state
+	P::AP				# filtered state variance
+	v::Matrix{Float64}	# forecast error
+	Fi::AF				# inverse forecast error variance
+	K::Array{Float64,3}	# Kalman gain
 end
-
+# Kalman smoother
 struct Smoother{A<:AbstractArray}
-	α::Matrix{Float64}
-	V::A
+	α::Matrix{Float64}	# smoothed state
+	V::A				# smoothed state covariances
 end
-	
+# State Space model system matrices 
 struct SysMat{MT<:AbstractMatrix, MH<:AbstractMatrix, MQ<:AbstractMatrix, MP<:AbstractMatrix}
-	Z::Matrix{Float64}
-	T::MT
-	H::MH
-	Q::MQ
-	a1::Vector{Float64}
-	P1::MP
+	Z::Matrix{Float64}	# system matrix Z
+	T::MT				# system matrix T
+	H::MH				# system matrix H
+	Q::MQ				# system matrix Q
+	a1::Vector{Float64}	# initial state
+	P1::MP				# initial state variance
 end
 
 # Include programs
