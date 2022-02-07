@@ -80,9 +80,6 @@ end
 
 function loglik(f::UnivariateFilter)
     (n,T_len)= size(f.v)
-	
-	# Initialize temp. container
-	tmp= Matrix{Float64}(undef, (n,n))
 
     # Initialize log-likelihood
     ll= zero(Float64)
