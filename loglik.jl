@@ -15,12 +15,12 @@ Compute the log-likelihood for a linear Gaussian State Space model with Kalman
 filter output `f`.
 
 #### Arguments
-  - `f::Filter`	: Kalman filter output
+  - `f::KalmanFilter`	: Kalman filter output
 
 #### Returns
   - `ll::Real`	: log-likelihood
 """
-function loglik(f::Filter)
+function loglik(f::MultivariateFilter)
     (n,T_len)= size(f.v)
 	
 	# Initialize temp. containers
@@ -52,19 +52,7 @@ function loglik(f::Filter)
     return .5*ll
 end
 
-"""
-	loglik(f)
-	
-Compute the log-likelihood for a linear Gaussian State Space model with Kalman
-filter output `f` based on Woodbury's Identity.
-
-#### Arguments
-  - `f::FilterWb`	: Kalman filter output
-
-#### Returns
-  - `ll::Real`		: log-likelihood
-"""
-function loglik(f::FilterWb)
+function loglik(f::WoodburyFilter)
     (n,T_len)= size(f.v)
 	
 	# Initialize temp. container
@@ -90,20 +78,7 @@ function loglik(f::FilterWb)
     return .5*ll
 end
 
-"""
-	loglik_eq(f)
-	
-Compute the log-likelihood for a linear Gaussian State Space model with Kalman
-filter output `f` based on the equation-by-equation or univariate version of
-the filter.
-
-#### Arguments
-  - `f::Filter`	: Kalman filter output
-
-#### Returns
-  - `ll::Real`		: log-likelihood
-"""
-function loglik_eq(f::Filter)
+function loglik(f::UnivariateFilter)
     (n,T_len)= size(f.v)
 	
 	# Initialize temp. container

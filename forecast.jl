@@ -57,16 +57,16 @@ latent states as well as forecast error variances for a State Space model using
 the Kalman filter output `f`.
 
 #### Arguments
-  - `f::Filter`		: Kalman filter output
-  - `mat::SysMat`	: State Space system matrices
-  - `h::Integer`	: forecast horizon
+  - `f::KalmanFilter`	: Kalman filter output
+  - `mat::SysMat`		: State Space system matrices
+  - `h::Integer`		: forecast horizon
 
 #### Returns
   - `a_h::AbstractMatrix`	: h-step ahead forecasts of states (p x h)
   - `P_h::AbstractArray`	: h-step ahead forecast variances (p x p x h)
   - `F_h::AbstractArray`	: h-step ahead forecast error variances (n x n x h)
 """
-function forecast(f::Filter, mat::SysMat, h::Integer)
+function forecast(f::KalmanFilter, mat::SysMat, h::Integer)
 	# Get dimensions
 	(n,p)= size(mat.Z)
 	T_len= size(f.a,2)
@@ -113,7 +113,7 @@ latent states as well as forecast error variances for a State Space model and
 storing them in `a_h`, `P_h`, and `F_h`. See also `forecast`.
 """
 function forecast!(a_h::AbstractMatrix, P_h::AbstractArray, F_h::AbstractArray, 
-					f::Filter, mat::SysMat, h::Integer)
+					f::KalmanFilter, mat::SysMat, h::Integer)
 	# Get dimensions
 	(n,p)= size(mat.Z)
 	T_len= size(f.a,2)
