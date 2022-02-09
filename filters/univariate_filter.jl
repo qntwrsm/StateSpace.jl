@@ -46,7 +46,7 @@ function forward!(a_f::AbstractVector, P_f::AbstractMatrix, a_i::AbstractVector,
 end
 
 """
-	predict!(a_p, P_p, a_t, P_t, T, Q, tmp)
+	predict!(a_p, P_p, a_t, P_t, T, Q, c, tmp)
 	
 Predict states ``a`` and corresponding variance ``P`` at time ``t+1`` using
 univariate treatment, storing the result in `a_p` and `P_p`.
@@ -56,6 +56,7 @@ univariate treatment, storing the result in `a_p` and `P_p`.
   - `P_t::AbstractMatrix`	: predicted states variance at time ``t`` (p x p)
   - `T::AbstractMatrix`		: system matrix ``T`` (p x p)
   - `Q::AbstractMatrix`		: system matrix ``Q`` (p x p)
+  - `c::AbstractVector`		: mean adjustment (p x 1)
   - `tmp::AbstractMatrix`	: tmp storage array (p x p)
 
 #### Returns
@@ -64,9 +65,10 @@ univariate treatment, storing the result in `a_p` and `P_p`.
 """
 function predict!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVector, 
 						P_t::AbstractMatrix, T::AbstractMatrix, Q::AbstractMatrix, 
-						tmp::AbstractMatrix)
+						c::AbstractVector, tmp::AbstractMatrix)
 	# Predict states
 	mul!(a_p, T, a_t)
+	a_p.+= c
 
 	# Predict states variance
 	# PₜｘT'
@@ -81,9 +83,10 @@ end
 
 function predict!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVector, 
 						P_t::AbstractMatrix, T::AbstractMatrix, Q::Diagonal, 
-						tmp::AbstractMatrix)
+						c::AbstractVector, tmp::AbstractMatrix)
 	# Predict states
 	mul!(a_p, T, a_t)
+	a_p.+= c
 
 	# Predict states variance
 	# PₜｘT'
@@ -100,9 +103,9 @@ end
 
 function predict!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVector, 
 						P_t::AbstractMatrix, T::Diagonal, Q::AbstractMatrix, 
-						tmp::AbstractMatrix)
+						c::AbstractVector, tmp::AbstractMatrix)
 	# Predict states
-	@. a_p= T.diag*a_t
+	@. a_p= T.diag*a_t + c
 
 	# Predict states variance
 	@. P_p= T.diag*P_t*transpose(T.diag) + mat.Q
@@ -111,69 +114,69 @@ function predict!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVector,
 end
 
 """
-	kalman_filter!(f, Y, mat) 
+	kalman_filter!(filter, y, mat) 
 	
 Compute predicted states ``a`` and forecast errors ``v`` with corresponding
 variances ``P`` and ``F`` and Kalman gain ``K`` for a linear Gaussian State
-Space model with system matrices `mat` and data `Y` using the
+Space model with system matrices `sys` and data `y` using the
 equation-by-equation or univariate version of the Kalman filter, storing the
-results in `f`.
+results in `filter`.
 
 #### Arguments
-  - `Y::AbstractMatrix`	: data (n x T)
-  - `mat::SysMat`		: State Space system matrices
+  - `y::AbstractMatrix`		: data (n x T)
+  - `sys::StateSpaceSystem`	: state space system matrices
     
 #### Returns
-  - `f::UnivariateFilter`   : Kalman filter output
+  - `filter::UnivariateFilter`	: Kalman filter output
 """
-function kalman_filter!(f::UnivariateFilter, Y::AbstractMatrix, mat::SysMat)
+function kalman_filter!(filter::UnivariateFilter, y::AbstractMatrix, sys::StateSpaceSystem)
 	# Get dims
-	(n,T_len)= size(Y)
-	p= length(mat.a1)
+	(n,T_len)= size(y)
+	p= length(sys.a1)
 	
     # Initialize temp. containers
     tmp_p= Matrix{Float64}(undef, (p,p))
 	
 	# Initialize filter
-	f.a[:,1,1]= mat.a1
-	f.P[:,:,1,1]= mat.P1
+	filter.a[:,1,1]= sys.a1
+	filter.P[:,:,1,1]= sys.P1
 	
 	# Tranpose
-	Zt= transpose(mat.Z)
+	Zt= transpose(sys.Z)
 	
 	# Filter
 	@inbounds @fastmath for t in 1:T_len
 		for i in 1:n
 	        # Store views 
-	        a_it= view(f.a,:,i,t)
-			a_f= view(f.a,:,i+1,t)
-			P_it= view(f.P,:,:,i,t)
-			P_f= view(f.P,:,:,i+1,t)
-	        K_it= view(f.K,:,i,t)
+	        a_it= view(filter.a,:,i,t)
+			a_f= view(filter.a,:,i+1,t)
+			P_it= view(filter.P,:,:,i,t)
+			P_f= view(filter.P,:,:,i+1,t)
+	        K_it= view(filter.K,:,i,t)
 			Z_i= view(Zt,:,i)
 		
 			# Forecast error
-			f.v[i,t]= Y[i,t] - dot(Z_i, a_it)
+			filter.v[i,t]= y[i,t] - dot(Z_i, a_it) - sys.d[i]
 		
 			# Forecast error variance
-			f.F[i,t]= dot(Z_i, P_it, Z_i) + H.diag[i]
+			filter.F[i,t]= dot(Z_i, P_it, Z_i) + sys.H.diag[i]
 		
 			# Kalman gain
-			mul!(K_it, P_it, Z_i, inv(f.F[i,t]), .0)
+			mul!(K_it, P_it, Z_i, inv(filter.F[i,t]), .0)
 		
 			# Move states and variances forward
-			forward!(a_f, P_f, a_it, P_it, K_it, f.v[i,t], f.F[i,t])
+			forward!(a_f, P_f, a_it, P_it, K_it, filter.v[i,t], filter.F[i,t])
 		end
 		
 		if t < T_len
 			# Store views
-			a_f= view(f.a,:,n+1,t)
-			P_f= view(f.P,:,:,n+1,t)
-	        a_p= view(f.a,:,1,t+1)
-			P_p= view(f.P,:,:,1,t+1)
+			a_f= view(filter.a,:,n+1,t)
+			P_f= view(filter.P,:,:,n+1,t)
+	        a_p= view(filter.a,:,1,t+1)
+			P_p= view(filter.P,:,:,1,t+1)
 			
 			# Predict states and variances
-			predict!(a_p, P_p, a_f, P_f, mat.T, mat.Q, tmp_p)
+			predict!(a_p, P_p, a_f, P_f, sys.T, sys.Q, sys.c, tmp_p)
 		end
 	end
 	
