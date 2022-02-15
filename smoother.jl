@@ -564,7 +564,7 @@ function kalman_smoother!(smoother::Smoother, filter::UnivariateFilter, sys::Sta
 end
 
 """
-	kalman_smoother_cov!(smoother, filter, sys, h)
+	kalman_smoother_cov!(smoother, filter, sys; h=1)
 	
 Compute smoothed states ``α`` and corresponding variances ``V`` and
 autocovariances ``V(h)`` up until lag `h` for a linear Gaussian State Space
@@ -580,7 +580,7 @@ results in `smoother`.
   - `smoother::Smoother`	: Kalman smoother output
 """
 function kalman_smoother_cov!(smoother::Smoother, filter::MultivariateFilter,
-								sys::StateSpaceSystem, h::Integer)
+								sys::StateSpaceSystem; h::Integer=1)
 	# Get dims
 	(p,n,T_len)= size(filter.K)
 	
@@ -631,7 +631,7 @@ function kalman_smoother_cov!(smoother::Smoother, filter::MultivariateFilter,
 end
 
 function kalman_smoother_cov!(smoother::Smoother, filter::WoodburyFilter, 
-								sys::StateSpaceSystem, h::Integer)
+								sys::StateSpaceSystem; h::Integer=1)
 	# Get dims
 	(p,n,T_len)= size(filter.K)
 	
@@ -677,7 +677,7 @@ function kalman_smoother_cov!(smoother::Smoother, filter::WoodburyFilter,
 end
 
 function kalman_smoother_cov!(smoother::Smoother, filter::UnivariateFilter, 
-								sys::StateSpaceSystem, h::Integer)
+								sys::StateSpaceSystem; h::Integer=1)
 	# Get dims
 	(p,n,T_len)= size(filter.K)
 	

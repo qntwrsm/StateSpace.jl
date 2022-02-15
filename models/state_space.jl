@@ -16,6 +16,19 @@ Abstract type for state space models.
 abstract type StateSpaceModel end
 
 """
+    number_parameters(model)
+
+Determine the number of hyper parameters.
+
+#### Arguments
+  - `model::StateSpaceModel`: state space model
+
+#### Returns
+  - `n_params::Integer` : number of hyper parameters
+"""
+number_parameters(model::StateSpaceModel)= nothing
+
+"""
     get_parameters!(ψ, model)
 
 Retrieve hyper parameters from the state space model and store them in `ψ`.
@@ -68,26 +81,34 @@ Store system matrices from the state space model in `model`.
 store_system!(model::StateSpaceModel, sys::StateSpaceSystem)= nothing 
 
 """
-    init!(model, sys)
+    init!(model, fixed, constraints)
 
 Initialize the state space model hyper parameters as defined by `model` and the
 initial conditions of the state space model in `sys`.
+
+#### Arguments
+  - `fixed::NamedTuple`			: fixed hyper parameters
+  - `constraints::NamedTuple` 	: constraints
 
 #### Returns
   - `model::StateSpaceModel`: state space model
   - `sys::StateSpaceSystem` : state space system matrices
 """
-init!(model::StateSpaceModel, sys::StateSpaceSystem)= nothing
+init!(model::StateSpaceModel, fixed::NamedTuple, constraints::NamedTuple)= nothing
 
 """
-    init_model!(model)
+    init_model!(model, fixed, constraints)
 
 Initialize the state space model hyper parameters.
+
+#### Arguments
+  - `fixed::NamedTuple`			: fixed hyper parameters
+  - `constraints::NamedTuple` 	: constraints
 
 #### Returns
   - `model::StateSpaceModel`: state space model
 """
-init_model!(model::StateSpaceModel)= nothing
+init_model!(model::StateSpaceModel, fixed::NamedTuple, constraints::NamedTuple)= nothing
 
 """
     init_system!(sys, model)
@@ -101,3 +122,19 @@ Initialize the state space model hyper parameters.
   - `sys::StateSpaceSystem` : state space system matrices
 """
 init_system!(sys::StateSpaceSystem, model::StateSpaceModel)= nothing
+
+"""
+	update_model!(model, state, smoother, fixed)
+
+Update state space model hyper parameters, as part of the EM algorithm, storing
+the results in `model`.
+
+#### Arguments
+  - `state::EMState`	: state variables
+  - `smoother::Smoother`: Kalman smoother output
+  - `fixed::NamedTuple`	: fixed hyper parameters
+
+#### Returns
+  - `model::StateSpaceModel`: state space model
+"""
+update_model!(model::StateSpaceModel, state::EMState, smoother::Smoother, fixed::NamedTuple)= nothing

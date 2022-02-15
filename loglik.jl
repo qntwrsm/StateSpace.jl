@@ -9,32 +9,32 @@ loglik.jl
 =#
 
 """
-	loglik(f)
+	loglik(filter)
 	
 Compute the log-likelihood for a linear Gaussian State Space model with Kalman
-filter output `f`.
+filter output `filter`.
 
 #### Arguments
-  - `f::KalmanFilter`	: Kalman filter output
+  - `filter::KalmanFilter`	: Kalman filter output
 
 #### Returns
   - `ll::Real`	: log-likelihood
 """
-function loglik(f::MultivariateFilter)
-    (n,T_len)= size(f.v)
+function loglik(filter::MultivariateFilter)
+    (n,T_len)= size(filter.v)
 	
 	# Initialize temp. containers
 	tmp_nn= Matrix{Float64}(undef, (n,n))
 	tmp_n= view(tmp_nn,:,1)
 
     # Initialize log-likelihood
-    ll= -log(2.0*pi)*T_len*n
+    ll= -log(2*pi)*T_len*n
 
     # Log-likelihood
     @inbounds @fastmath for t in 1:T_len
 		# Store views
-        v_t= view(f.v,:,t)
-		F_t= view(f.F,:,:,t)
+        v_t= view(filter.v,:,t)
+		F_t= view(filter.F,:,:,t)
 		
 		# Cholesky factorization of Fₜ
 		copyto!(tmp_nn, F_t)
@@ -52,8 +52,8 @@ function loglik(f::MultivariateFilter)
     return .5*ll
 end
 
-function loglik(f::WoodburyFilter)
-    (n,T_len)= size(f.v)
+function loglik(filter::WoodburyFilter)
+    (n,T_len)= size(filter.v)
 	
 	# Initialize temp. container
 	tmp= Matrix{Float64}(undef, (n,n))
@@ -64,8 +64,8 @@ function loglik(f::WoodburyFilter)
     # Log-likelihood
     @inbounds @fastmath for t in 1:T_len
 		# Store views
-        v_t= view(f.v,:,t)
-		Fi_t= view(f.Fi,:,:,t)
+        v_t= view(filter.v,:,t)
+		Fi_t= view(filter.Fi,:,:,t)
 		
 		# vₜ'ｘFₜ⁻¹ｘvₜ
 		ll-= dot(v_t, Fi_t, v_t)
@@ -78,8 +78,8 @@ function loglik(f::WoodburyFilter)
     return .5*ll
 end
 
-function loglik(f::UnivariateFilter)
-    (n,T_len)= size(f.v)
+function loglik(filter::UnivariateFilter)
+    (n,T_len)= size(filter.v)
 
     # Initialize log-likelihood
     ll= zero(Float64)
@@ -87,9 +87,9 @@ function loglik(f::UnivariateFilter)
     # Log-likelihood
     @inbounds @fastmath for t in 1:T_len
 		for i in 1:n
-			F_it= f.F[i,t]
+			F_it= filter.F[i,t]
 			if F_it > zero(F_it)
-				ll-= .5*(log(2.0*pi) + log(F_it) + f.v[i,t]^2*inv(F_it))
+				ll-= .5*(log(2.0*pi) + log(F_it) + filter.v[i,t]^2*inv(F_it))
 			end
 		end
     end		
