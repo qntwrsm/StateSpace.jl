@@ -38,7 +38,7 @@ function loglik(filter::MultivariateFilter)
 		
 		# Cholesky factorization of Fₜ
 		copyto!(tmp_nn, F_t)
-		C= cholesky!(tmp_nn)
+		C= cholesky!(Hermitian(tmp_nn))
 		
 		# log|Fₜ|
        	ll-= logdet(C)
@@ -72,7 +72,7 @@ function loglik(filter::WoodburyFilter)
 		
 		# log|Fₜ⁻¹|
 		copyto!(tmp, Fi_t)
-       	ll+= logdet(cholesky!(tmp))
+       	ll+= logdet(cholesky!(Hermitian(tmp)))
     end
 
     return .5*ll
