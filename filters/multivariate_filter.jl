@@ -113,15 +113,15 @@ function error_prec!(Fi_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatri
 					tmp_p::AbstractMatrix)
 	# Pₜ⁻¹
 	copyto!(tmp_p, P_t)
-	LinearAlgebra.inv!(cholesky!(tmp_p))
+	LinearAlgebra.inv!(cholesky!(Hermitian(tmp_p)))
 	# H⁻¹×Z
 	mul!(tmp_np, Hi, Z)
 	# Pₜ⁻¹ + Z'×H⁻¹×Z
 	mul!(tmp_p, transpose(Z), tmp_np, 1., 1.)
 	# (Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹
-	LinearAlgebra.inv!(cholesky!(tmp_p))
+	LinearAlgebra.inv!(cholesky!(Hermitian(tmp_p)))
 	# (Pₜ⁻¹ + Z′×H⁻¹×Z)⁻¹×Z′×H⁻¹
-	mul!(tmp_pn, tmp_p, transpose(HiZ))
+	mul!(tmp_pn, tmp_p, transpose(tmp_np))
 	# -H⁻¹×Z×(Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹×Z'×H⁻¹
 	mul!(Fi_t, tmp_np, tmp_pn, -1., .0)
 	# Fₜ⁻¹ = H⁻¹ - H⁻¹×Z×(Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹×Z'×H⁻¹
@@ -135,17 +135,17 @@ function error_prec!(Fi_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatri
 					tmp_p::AbstractMatrix)
 	# Pₜ⁻¹
 	copyto!(tmp_p, P_t)
-	C= cholesky!(tmp_p)		# pointer(C.factors) = pointer(tmp_p)
+	C= cholesky!(Hermitian(tmp_p))		# pointer(C.factors) = pointer(tmp_p)
 	LinearAlgebra.inv!(C)
 	# H⁻¹×Z
 	mul!(tmp_np, Hi, Z)
 	# Pₜ⁻¹ + Z'×H⁻¹×Z
 	mul!(Pi, transpose(Z), tmp_np, 1., 1.)
 	# (Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹
-	C= cholesky!(tmp_p)		# pointer(C.factors) = pointer(tmp_p)
+	C= cholesky!(Hermitian(tmp_p))		# pointer(C.factors) = pointer(tmp_p)
 	LinearAlgebra.inv!(C)
 	# (Pₜ⁻¹ + Z′×H⁻¹×Z)⁻¹×Z′×H⁻¹
-	mul!(tmp_pn, tmp_p, transpose(HiZ))
+	mul!(tmp_pn, tmp_p, transpose(tmp_np))
 	# -H⁻¹×Z×(Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹×Z'×H⁻¹
 	mul!(Fi_t, tmp_np, tmp_pn, -1., .0)
 	# Fₜ⁻¹ = H⁻¹ - H⁻¹×Z×(Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹×Z'×H⁻¹
@@ -175,7 +175,7 @@ the result in `K_t`.
 function gain!(K_t::AbstractMatrix, P_t::AbstractMatrix, Fi_t::AbstractMatrix, 
 				Z::AbstractMatrix, T::AbstractMatrix, tmp::AbstractMatrix)
     # PₜｘZ'
-	mul!(K_t, P_t, tranpose(Z))
+	mul!(K_t, P_t, transpose(Z))
     # PₜｘZ'ｘFₜ⁻¹
 	mul!(tmp, K_t, Fi_t)
 	# Kₜ = TｘPₜｘZ'ｘFₜ⁻¹
@@ -193,7 +193,7 @@ the result in `K_t`.
 function gain!(K_t::AbstractMatrix, P_t::AbstractMatrix, fac::Factorization, 
 				Z::AbstractMatrix, T::AbstractMatrix, tmp::AbstractMatrix)
     # PₜｘZ'
-	mul!(K_t, P_t, tranpose(Z))
+	mul!(K_t, P_t, transpose(Z))
     # PₜｘZ'ｘFₜ⁻¹
 	rdiv!(tmp, fac)
 	# Kₜ = TｘPₜｘZ'ｘFₜ⁻¹
@@ -336,7 +336,7 @@ storing the results in `filter`.
 #### Returns
   - `filter::MultivariateFilter`: Kalman filter output
 """
-function kalman_filter!(filter::MultivariateFilter, y::AbstractMatrix, sys::StateSpaceSystem)
+function kalman_filter!(filter::MultivariateFilter, y::AbstractMatrix, sys::LinearTimeInvariant)
 	# Get dims
 	(n,T_len)= size(y)
 	p= length(sys.a1)
@@ -367,7 +367,7 @@ function kalman_filter!(filter::MultivariateFilter, y::AbstractMatrix, sys::Stat
 		
 		# Cholesky factorization of Fₜ
 		copyto!(tmp_n, F_t)
-		fac= cholesky!(tmp_n)
+		fac= cholesky!(Hermitian(tmp_n))
 		
 		# Kalman gain
 		gain!(K_t, P_t, fac, sys.Z, sys.T, tmp_pn)
@@ -382,6 +382,60 @@ function kalman_filter!(filter::MultivariateFilter, y::AbstractMatrix, sys::Stat
 			
 			# Predict states variance
 			predict_state_var!(P_p, P_t, K_t, sys.Z, sys.T, sys.Q, tmp_p)
+		end
+	end
+	
+	return nothing
+end
+
+function kalman_filter!(filter::MultivariateFilter, y::AbstractMatrix, sys::LinearTimeVariant)
+	# Get dims
+	(n,T_len)= size(y)
+	p= length(sys.a1)
+	
+    # Initialize temp. containers
+    tmp_pn= Matrix{Float64}(undef, (p,n))
+    tmp_p= Matrix{Float64}(undef, (p,p))
+	tmp_n= Matrix{Float64}(undef, (n,n))
+	
+	# Initialize filter
+	filter.a[:,1]= sys.a1
+	filter.P[:,:,1]= sys.P1
+	
+	# Filter
+	@inbounds @fastmath for t in 1:T_len
+        # Store views 
+        a_t= view(filter.a,:,t)
+		P_t= view(filter.P,:,:,t)
+        v_t= view(filter.v,:,t)
+        F_t= view(filter.F,:,:,t)
+        K_t= view(filter.K,:,:,t)
+		d_t= view(sys.d,:,t)
+		c_t= view(sys.c,:,t)
+		
+		# Forecast error
+        error!(v_t, view(y,:,t), sys.Z[t], a_t, d_t)
+		
+		# Forecast error variance
+		error_var!(F_t, P_t, sys.Z[t], sys.H[t], tmp_pn)
+		
+		# Cholesky factorization of Fₜ
+		copyto!(tmp_n, F_t)
+		fac= cholesky!(Hermitian(tmp_n))
+		
+		# Kalman gain
+		gain!(K_t, P_t, fac, sys.Z[t], sys.T[t], tmp_pn)
+		
+		if t < T_len
+			# Store views
+	        a_p= view(filter.a,:,t+1)
+			P_p= view(filter.P,:,:,t+1)
+			
+			# Predict states
+			predict_state!(a_p, a_t, K_t, v_t, sys.T[t], c_t)
+			
+			# Predict states variance
+			predict_state_var!(P_p, P_t, K_t, sys.Z[t], sys.T[t], sys.Q[t], tmp_p)
 		end
 	end
 	
@@ -406,7 +460,7 @@ Woodbury's Identity allows direct computation of the inverse variance
 #### Returns
   - `filter::WoodburyFilter`: Kalman filter output
 """
-function kalman_filter!(filter::WoodburyFilter, y::AbstractMatrix, sys::StateSpaceSystem)
+function kalman_filter!(filter::WoodburyFilter, y::AbstractMatrix, sys::LinearTimeInvariant)
 	# Get dims
 	(n,T_len)= size(y)
 	p= length(sys.a1)
@@ -456,6 +510,65 @@ function kalman_filter!(filter::WoodburyFilter, y::AbstractMatrix, sys::StateSpa
 			
 			# Predict states variance
 			predict_state_var!(P_p, P_t, K_t, sys.Z, sys.T, sys.Q, tmp_p)
+		end
+	end
+	
+	return nothing
+end
+
+function kalman_filter!(filter::WoodburyFilter, y::AbstractMatrix, sys::LinearTimeVariant)
+	# Get dims
+	(n,T_len)= size(y)
+	p= length(sys.a1)
+	
+    # Initialize temp. containers
+	tmp_np= Matrix{Float64}(undef, (n,p))
+    tmp_pn= Matrix{Float64}(undef, (p,n))
+    tmp_p= Matrix{Float64}(undef, (p,p))
+	Hi= similar(sys.H[1], n, n)
+	
+	# Initialize filter
+	filter.a[:,1]= sys.a1
+	filter.P[:,:,1]= sys.P1
+	
+	# Filter
+	@inbounds @fastmath for t in 1:T_len
+        # Store views 
+        a_t= view(filter.a,:,t)
+		P_t= view(filter.P,:,:,t)
+        v_t= view(filter.v,:,t)
+        Fi_t= view(filter.Fi,:,:,t)
+        K_t= view(filter.K,:,:,t)
+		d_t= view(sys.d,:,t)
+		c_t= view(sys.c,:,t)
+
+		# Inverse of H
+		Hi.= sys.H[t]
+		if sys.H[t] isa Diagonal
+			@. Hi.diag= inv(sys.H[t].diag)
+		else
+			LinearAlgebra.inv!(cholesky!(Hi))
+		end
+		
+		# Forecast error
+        error!(v_t, view(y,:,t), sys.Z[t], a_t, d_t)
+		
+		# Forecast error precision
+		error_prec!(Fi_t, P_t, sys.Z[t], Hi, tmp_np, tmp_pn, tmp_p)
+		
+		# Kalman gain
+		gain!(K_t, P_t, Fi_t, sys.Z[t], sys.T[t], tmp_pn)
+		
+		if t < T_len
+			# Store views
+	        a_p= view(filter.a,:,t+1)
+			P_p= view(filter.P,:,:,t+1)
+			
+			# Predict states
+			predict_state!(a_p, a_t, K_t, v_t, sys.T[t], c_t)
+			
+			# Predict states variance
+			predict_state_var!(P_p, P_t, K_t, sys.Z[t], sys.T[t], sys.Q[t], tmp_p)
 		end
 	end
 	

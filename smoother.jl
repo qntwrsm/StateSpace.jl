@@ -9,9 +9,12 @@ smoother.jl
 =#
 
 # Struct
-struct Smoother{Tα, TV}
+struct Smoother{Tα, TV, TL, Tr, TN} <: KalmanSmoother
 	α::Tα	# smoothed state
-	V::Tv	# smoothed state covariances
+	V::TV	# smoothed state covariances
+	L::TL	# innovation error smoother transition matrix
+	r::Tr	# backward smoothing recursion (state)
+	N::TN	# backward smoothing recursion (variance)
 end
 
 """
@@ -29,16 +32,16 @@ Compute the ``L`` matrix at time ``t``, storing the result in `L_t`.
 """
 function computeL!(L_t::AbstractMatrix, K_t::AbstractMatrix, Z::AbstractMatrix, T::AbstractMatrix)
 	# -KₜｘZ
-	mul!(L_t, K_t, mat.Z, -1., .0)
+	mul!(L_t, K_t, Z, -1., .0)
 	# Lₜ = T - KₜｘZ
-	@. L_t+= mat.T
+	@. L_t+= T
 	
 	return nothing
 end
 
 function computeL!(L_t::AbstractMatrix, K_t::AbstractMatrix, Z::AbstractMatrix, T::Diagonal)
 	# -KₜｘZ
-	mul!(L_t, K_t, mat.Z, -1., .0)
+	mul!(L_t, K_t, Z, -1., .0)
 	# Lₜ = T - KₜｘZ
 	@inbounds @fastmath for i in axes(T,1)
 		L_t[i,i]+= T.diag[i]
@@ -181,7 +184,7 @@ function back_state_var!(N::AbstractMatrix, L_t::AbstractMatrix, Fi_t::AbstractM
 end
 
 """
-	back_state_var!(N, L_t, fac, Z)
+	back_state_var!(N, L_t, fac, Z, tmp_np, tmp_pp)
 	
 Compute the backward recursion for the smoothed state variance ``N`` at time
 ``t`` using the factorization of ``F``, storing the result in `N`.
@@ -189,7 +192,7 @@ Compute the backward recursion for the smoothed state variance ``N`` at time
 function back_state_var!(N::AbstractMatrix, L_t::AbstractMatrix, fac::Factorization, 
 						Z::AbstractMatrix, tmp_np::AbstractMatrix, tmp_pp::AbstractMatrix)
 	# NₜｘLₜ
-	mul!(tmp_p, N, L_t)
+	mul!(tmp_pp, N, L_t)
 	# LₜｘNₜｘLₜ
 	mul!(N, transpose(L_t), tmp_pp)
 	# Fₜ⁻¹ｘZ
@@ -335,7 +338,7 @@ function smooth_state_var!(V_t::AbstractMatrix, P_t::AbstractMatrix, N::Abstract
 	# Nₜ₋₁ｘPₜ
 	mul!(tmp, N, P_t)
 	# -PₜｘNₜ₋₁ｘPₜ
-	mul!(V_t, P_t, N, -1., .0)
+	mul!(V_t, P_t, tmp, -1., .0)
 	# Vₜ = Pₜ - PₜｘNₜ₋₁ｘPₜ
 	@. V_t+= P_t 
 	
@@ -376,7 +379,7 @@ function smooth_state_cov!(V::AbstractArray, N::AbstractMatrix, L::AbstractMatri
 	# Loop through lags
 	for j in 0:h
 		# Store
-		V[:,:,j+1,t]= tmp_0
+		V[:,:,j+1,t].= tmp_0
 		
 		for s in t+1:min(t+j,T_len)
 			# Store view
@@ -384,7 +387,7 @@ function smooth_state_cov!(V::AbstractArray, N::AbstractMatrix, L::AbstractMatri
 			
 			# Propagate backwards with Lₜ₋₁
 			mul!(tmp_1, V_js, L)
-			V_js= tmp_1
+			V_js.= tmp_1
 		end
 		
 		# Complete autocovariance
@@ -394,7 +397,7 @@ function smooth_state_cov!(V::AbstractArray, N::AbstractMatrix, L::AbstractMatri
 			
 			# Vₜ(j) = (I - Pₜ₊ⱼｘNₜ₊ⱼ₋₁)ｘLₜ₊ⱼ₋₁ｘ...ｘLₜ₊₁ｘLₜｘPₜ
 			mul!(tmp_1, V_jt, P_t)
-			V_jt= tmp_1
+			V_jt.= tmp_1
 		end
 	end
 	
@@ -415,12 +418,11 @@ Gaussian State Space model with system matrices `sys` and Kalman filter output
 #### Returns
   - `smoother::Smoother`	: Kalman smoother output
 """
-function kalman_smoother!(smoother::Smoother, filter::MultivariateFilter, sys::StateSpaceSystem)
+function kalman_smoother!(smoother::Smoother, filter::MultivariateFilter, sys::LinearTimeInvariant)
 	# Get dims
 	(p,n,T_len)= size(filter.K)
 	
     # Initialize temp. containers
-	L= Matrix{Float64}(undef, (p,p))
     tmp_n= Vector{Float64}(undef, n)
     tmp_p= Vector{Float64}(undef, p)
 	tmp_nn= Matrix{Float64}(undef, (n,n))
@@ -428,9 +430,9 @@ function kalman_smoother!(smoother::Smoother, filter::MultivariateFilter, sys::S
 	tmp_pp= Matrix{Float64}(undef, (p,p))
 	
 	# Initialize smoother
-	r= zeros(Float64, p)
-	N= zeros(Float64, (p,p))
-	
+	smoother.r.= zero(Float64)
+	smoother.N.= zero(Float64)
+
 	# Smoother
 	@inbounds @fastmath for t in T_len:-1:1
         # Store views
@@ -443,43 +445,91 @@ function kalman_smoother!(smoother::Smoother, filter::MultivariateFilter, sys::S
         K_t= view(filter.K,:,:,t)
 		
 		# Lₜ
-		computeL!(L, K_t, sys.Z, sys.T)
+		computeL!(smoother.L, K_t, sys.Z, sys.T)
 		
 		# Cholesky factorization of Fₜ
 		copyto!(tmp_nn, F_t)
-		fac= cholesky!(tmp_nn)
+		fac= cholesky!(Hermitian(tmp_nn))
 		
 		# Backward recursion state
-		back_state!(r, L, fac, v_t, sys.Z, tmp_n, tmp_p)
+		back_state!(smoother.r, smoother.L, fac, v_t, sys.Z, tmp_n, tmp_p)
 		
 		# Backward recursion state variance
-		back_state_var!(N, L, fac, sys.Z, tmp_np, tmp_pp)
+		back_state_var!(smoother.N, smoother.L, fac, sys.Z, tmp_np, tmp_pp)
 		
 		# Smoothed states
-		smooth_state!(α_t, a_t, P_t, r)
+		smooth_state!(α_t, a_t, P_t, smoother.r)
 		
 		# Smoothed states variance
-		smooth_state_var!(V_t, P_t, N, tmp_pp)
+		smooth_state_var!(V_t, P_t, smoother.N, tmp_pp)
 	end
 	
 	return nothing
 end
 
-function kalman_smoother!(smoother::Smoother, filter::WoodburyFilter, sys::StateSpaceSystem)
+function kalman_smoother!(smoother::Smoother, filter::MultivariateFilter, sys::LinearTimeVariant)
 	# Get dims
 	(p,n,T_len)= size(filter.K)
 	
     # Initialize temp. containers
-	L= Matrix{Float64}(undef, (p,p))
+    tmp_n= Vector{Float64}(undef, n)
+    tmp_p= Vector{Float64}(undef, p)
+	tmp_nn= Matrix{Float64}(undef, (n,n))
+	tmp_np= Matrix{Float64}(undef, (n,p))
+	tmp_pp= Matrix{Float64}(undef, (p,p))
+	
+	# Initialize smoother
+	smoother.r.= zero(Float64)
+	smoother.N.= zero(Float64)
+
+	# Smoother
+	@inbounds @fastmath for t in T_len:-1:1
+        # Store views
+		α_t= view(smoother.α,:,t)
+		V_t= view(smoother.V,:,:,t) 
+        a_t= view(filter.a,:,t)
+		P_t= view(filter.P,:,:,t)
+        v_t= view(filter.v,:,t)
+        F_t= view(filter.F,:,:,t)
+        K_t= view(filter.K,:,:,t)
+		
+		# Lₜ
+		computeL!(smoother.L, K_t, sys.Z[t], sys.T[t])
+		
+		# Cholesky factorization of Fₜ
+		copyto!(tmp_nn, F_t)
+		fac= cholesky!(Hermitian(tmp_nn))
+		
+		# Backward recursion state
+		back_state!(smoother.r, smoother.L, fac, v_t, sys.Z[t], tmp_n, tmp_p)
+		
+		# Backward recursion state variance
+		back_state_var!(smoother.N, smoother.L, fac, sys.Z[t], tmp_np, tmp_pp)
+		
+		# Smoothed states
+		smooth_state!(α_t, a_t, P_t, smoother.r)
+		
+		# Smoothed states variance
+		smooth_state_var!(V_t, P_t, smoother.N, tmp_pp)
+	end
+	
+	return nothing
+end
+
+function kalman_smoother!(smoother::Smoother, filter::WoodburyFilter, sys::LinearTimeInvariant)
+	# Get dims
+	(p,n,T_len)= size(filter.K)
+	
+    # Initialize temp. containers
     tmp_n= Vector{Float64}(undef, n)
     tmp_p= Vector{Float64}(undef, p)
 	tmp_np= Matrix{Float64}(undef, (n,p))
 	tmp_pp= Matrix{Float64}(undef, (p,p))
 	
 	# Initialize smoother
-	r= zeros(Float64, p)
-	N= zeros(Float64, (p,p))
-	
+	smoother.r.= zero(Float64)
+	smoother.N.= zero(Float64)
+
 	# Smoother
 	@inbounds @fastmath for t in T_len:-1:1
         # Store views
@@ -492,37 +542,80 @@ function kalman_smoother!(smoother::Smoother, filter::WoodburyFilter, sys::State
         K_t= view(filter.K,:,:,t)
 		
 		# Lₜ
-		computeL!(L, K_t, sys.Z, sys.T)
+		computeL!(smoother.L, K_t, sys.Z, sys.T)
 		
 		# Backward recursion state
-		back_state!(r, L, Fi_t, v_t, sys.Z, tmp_n, tmp_p)
+		back_state!(smoother.r, smoother.L, Fi_t, v_t, sys.Z, tmp_n, tmp_p)
 		
 		# Backward recursion state variance
-		back_state_var!(N, L, Fi_t, sys.Z, tmp_np, tmp_pp)
+		back_state_var!(smoother.N, smoother.L, Fi_t, sys.Z, tmp_np, tmp_pp)
 		
 		# Smoothed states
-		smooth_state!(α_t, a_t, P_t, r)
+		smooth_state!(α_t, a_t, P_t, smoother.r)
 		
 		# Smoothed states variance
-		smooth_state_var!(V_t, P_t, N, tmp_pp)
+		smooth_state_var!(V_t, P_t, smoother.N, tmp_pp)
 	end
 	
 	return nothing
 end
 
-function kalman_smoother!(smoother::Smoother, filter::UnivariateFilter, sys::StateSpaceSystem)
+function kalman_smoother!(smoother::Smoother, filter::WoodburyFilter, sys::LinearTimeVariant)
 	# Get dims
 	(p,n,T_len)= size(filter.K)
 	
     # Initialize temp. containers
-	L_i= Matrix{Float64}(undef, (p,p))
+    tmp_n= Vector{Float64}(undef, n)
+    tmp_p= Vector{Float64}(undef, p)
+	tmp_np= Matrix{Float64}(undef, (n,p))
+	tmp_pp= Matrix{Float64}(undef, (p,p))
+	
+	# Initialize smoother
+	smoother.r.= zero(Float64)
+	smoother.N.= zero(Float64)
+
+	# Smoother
+	@inbounds @fastmath for t in T_len:-1:1
+        # Store views
+		α_t= view(smoother.α,:,t)
+		V_t= view(smoother.V,:,:,t) 
+        a_t= view(filter.a,:,t)
+		P_t= view(filter.P,:,:,t)
+        v_t= view(filter.v,:,t)
+        Fi_t= view(filter.Fi,:,:,t)
+        K_t= view(filter.K,:,:,t)
+		
+		# Lₜ
+		computeL!(smoother.L, K_t, sys.Z[t], sys.T[t])
+		
+		# Backward recursion state
+		back_state!(smoother.r, smoother.L, Fi_t, v_t, sys.Z[t], tmp_n, tmp_p)
+		
+		# Backward recursion state variance
+		back_state_var!(smoother.N, smoother.L, Fi_t, sys.Z[t], tmp_np, tmp_pp)
+		
+		# Smoothed states
+		smooth_state!(α_t, a_t, P_t, smoother.r)
+		
+		# Smoothed states variance
+		smooth_state_var!(V_t, P_t, smoother.N, tmp_pp)
+	end
+	
+	return nothing
+end
+
+function kalman_smoother!(smoother::Smoother, filter::UnivariateFilter, sys::LinearTimeInvariant)
+	# Get dims
+	(p,n,T_len)= size(filter.K)
+	
+    # Initialize temp. containers
     tmp_p= Vector{Float64}(undef, p)
 	tmp_pp= Matrix{Float64}(undef, (p,p))
 	
 	# Initialize smoother
-	r= zeros(Float64, p)
-	N= zeros(Float64, (p,p))
-	
+	smoother.r.= zero(Float64)
+	smoother.N.= zero(Float64)
+
 	# Tranpose
 	Zt= transpose(sys.Z)
 	
@@ -535,8 +628,8 @@ function kalman_smoother!(smoother::Smoother, filter::UnivariateFilter, sys::Sta
 		P_t= view(filter.P,:,:,1,t)
 		
 		# Time transition
-		transition!(r, sys.T, 'T', tmp_p)
-		transition2!(N, sys.T, tmp_pp)
+		transition!(smoother.r, sys.T, 'T', tmp_p)
+		transition2!(smoother.N, sys.T, tmp_pp)
 		
 		for i in n:-1:1
 			# Store views
@@ -544,20 +637,72 @@ function kalman_smoother!(smoother::Smoother, filter::UnivariateFilter, sys::Sta
 			Z_i= view(Zt,:,i)
 			
 			# Lₜᵢ
-			computeL_eq!(L_i, K_it, Z_i)
+			computeL_eq!(smoother.L, K_it, Z_i)
 			
 			# Backward recursion state
-			back_state_eq!(r, L_i, filter.F[i,t], filter.v[i,t], Z_i, tmp_p)
+			back_state_eq!(smoother.r, smoother.L, filter.F[i,t], filter.v[i,t], Z_i, tmp_p)
 		
 			# Backward recursion state variance
-			back_state_var_eq!(N, L_i, filter.F[i,t], Z_i, tmp_pp)
+			back_state_var_eq!(smoother.N, smoother.L, filter.F[i,t], Z_i, tmp_pp)
 		end
 		
 		# Smoothed states
-		smooth_state!(α_t, a_t, P_t, r)
+		smooth_state!(α_t, a_t, P_t, smoother.r)
 		
 		# Smoothed states variance
-		smooth_state_var!(V_t, P_t, N, tmp_pp)
+		smooth_state_var!(V_t, P_t, smoother.N, tmp_pp)
+	end
+	
+	return nothing
+end
+
+function kalman_smoother!(smoother::Smoother, filter::UnivariateFilter, sys::LinearTimeVariant)
+	# Get dims
+	(p,n,T_len)= size(filter.K)
+	
+    # Initialize temp. containers
+    tmp_p= Vector{Float64}(undef, p)
+	tmp_pp= Matrix{Float64}(undef, (p,p))
+	
+	# Initialize smoother
+	smoother.r.= zero(Float64)
+	smoother.N.= zero(Float64)
+	
+	# Smoother
+	@inbounds @fastmath for	t in T_len:-1:1
+		# store
+		Z_t= sys.Z[t]
+
+		# Store views
+		α_t= view(smoother.α,:,t)
+		V_t= view(smoother.V,:,:,t) 
+        a_t= view(filter.a,:,1,t)
+		P_t= view(filter.P,:,:,1,t)
+		
+		# Time transition
+		transition!(smoother.r, sys.T[t], 'T', tmp_p)
+		transition2!(smoother.N, sys.T[t], tmp_pp)
+		
+		for i in n:-1:1
+			# Store views
+	        K_it= view(filter.K,:,i,t)
+			Z_it= view(Z_t,i,:)
+			
+			# Lₜᵢ
+			computeL_eq!(smoother.L, K_it, Z_it)
+			
+			# Backward recursion state
+			back_state_eq!(smoother.r, smoother.L, filter.F[i,t], filter.v[i,t], Z_it, tmp_p)
+		
+			# Backward recursion state variance
+			back_state_var_eq!(smoother.N, smoother.L, filter.F[i,t], Z_it, tmp_pp)
+		end
+		
+		# Smoothed states
+		smooth_state!(α_t, a_t, P_t, smoother.r)
+		
+		# Smoothed states variance
+		smooth_state_var!(V_t, P_t, smoother.N, tmp_pp)
 	end
 	
 	return nothing
@@ -580,22 +725,21 @@ results in `smoother`.
   - `smoother::Smoother`	: Kalman smoother output
 """
 function kalman_smoother_cov!(smoother::Smoother, filter::MultivariateFilter,
-								sys::StateSpaceSystem; h::Integer=1)
+								sys::LinearTimeInvariant; h::Integer=1)
 	# Get dims
 	(p,n,T_len)= size(filter.K)
 	
     # Initialize temp. containers
-	L= Matrix{Float64}(undef, (p,p))
     tmp_n= Vector{Float64}(undef, n)
     tmp_p= Vector{Float64}(undef, p)
 	tmp_nn= Matrix{Float64}(undef, (n,n))
 	tmp_np= Matrix{Float64}(undef, (n,p))
 	tmp_pp= Matrix{Float64}(undef, (p,p))
 	tmp1_pp= Matrix{Float64}(undef, (p,p))
-	
+
 	# Initialize smoother
-	r= zeros(Float64, p)
-	N= zeros(Float64, (p,p))
+	smoother.r.= zero(Float64)
+	smoother.N.= zero(Float64)
 	
 	# Smoother
 	@inbounds @fastmath for t in T_len:-1:1
@@ -608,35 +752,84 @@ function kalman_smoother_cov!(smoother::Smoother, filter::MultivariateFilter,
         K_t= view(filter.K,:,:,t)
 		
 		# Lₜ
-		computeL!(L, K_t, sys.Z, sys.T)
+		computeL!(smoother.L, K_t, sys.Z, sys.T)
 		
 		# Cholesky factorization of Fₜ
 		copyto!(tmp_nn, F_t)
-		fac= cholesky!(tmp_nn)
+		fac= cholesky!(Hermitian(tmp_nn))
 		
 		# Backward recursion state
-		back_state!(r, L, fac, v_t, sys.Z, tmp_n, tmp_p)
+		back_state!(smoother.r, smoother.L, fac, v_t, sys.Z, tmp_n, tmp_p)
 		
 		# Backward recursion state variance
-		back_state_var!(N, L, fac, sys.Z, tmp_np, tmp_pp)
+		back_state_var!(smoother.N, smoother.L, fac, sys.Z, tmp_np, tmp_pp)
 		
 		# Smoothed states
-		smooth_state!(α_t, a_t, P_t, r)
+		smooth_state!(α_t, a_t, P_t, smoother.r)
 		
 		# Smoothed states autocovariance
-		smooth_state_cov!(smoother.V, N, L, P_t, t, h, tmp_pp, tmp1_pp)
+		smooth_state_cov!(smoother.V, smoother.N, smoother.L, P_t, t, h, tmp_pp, tmp1_pp)
+	end
+	
+	return nothing
+end
+
+function kalman_smoother_cov!(smoother::Smoother, filter::MultivariateFilter,
+								sys::LinearTimeVariant; h::Integer=1)
+	# Get dims
+	(p,n,T_len)= size(filter.K)
+	
+    # Initialize temp. containers
+    tmp_n= Vector{Float64}(undef, n)
+    tmp_p= Vector{Float64}(undef, p)
+	tmp_nn= Matrix{Float64}(undef, (n,n))
+	tmp_np= Matrix{Float64}(undef, (n,p))
+	tmp_pp= Matrix{Float64}(undef, (p,p))
+	tmp1_pp= Matrix{Float64}(undef, (p,p))
+
+	# Initialize smoother
+	smoother.r.= zero(Float64)
+	smoother.N.= zero(Float64)
+	
+	# Smoother
+	@inbounds @fastmath for t in T_len:-1:1
+        # Store views
+		α_t= view(smoother.α,:,t)
+        a_t= view(filter.a,:,t)
+		P_t= view(filter.P,:,:,t)
+        v_t= view(filter.v,:,t)
+        F_t= view(filter.F,:,:,t)
+        K_t= view(filter.K,:,:,t)
+		
+		# Lₜ
+		computeL!(smoother.L, K_t, sys.Z[t], sys.T[t])
+		
+		# Cholesky factorization of Fₜ
+		copyto!(tmp_nn, F_t)
+		fac= cholesky!(Hermitian(tmp_nn))
+		
+		# Backward recursion state
+		back_state!(smoother.r, smoother.L, fac, v_t, sys.Z[t], tmp_n, tmp_p)
+		
+		# Backward recursion state variance
+		back_state_var!(smoother.N, smoother.L, fac, sys.Z[t], tmp_np, tmp_pp)
+		
+		# Smoothed states
+		smooth_state!(α_t, a_t, P_t, smoother.r)
+		
+		# Smoothed states autocovariance
+		smooth_state_cov!(smoother.V, smoother.N, smoother.L, P_t, t, h, tmp_pp, tmp1_pp)
 	end
 	
 	return nothing
 end
 
 function kalman_smoother_cov!(smoother::Smoother, filter::WoodburyFilter, 
-								sys::StateSpaceSystem; h::Integer=1)
+								sys::LinearTimeInvariant; h::Integer=1)
 	# Get dims
 	(p,n,T_len)= size(filter.K)
 	
     # Initialize temp. containers
-	L= Matrix{Float64}(undef, (p,p))
     tmp_n= Vector{Float64}(undef, n)
     tmp_p= Vector{Float64}(undef, p)
 	tmp_np= Matrix{Float64}(undef, (n,p))
@@ -644,8 +837,8 @@ function kalman_smoother_cov!(smoother::Smoother, filter::WoodburyFilter,
 	tmp1_pp= Matrix{Float64}(undef, (p,p))
 	
 	# Initialize smoother
-	r= zeros(Float64, p)
-	N= zeros(Float64, (p,p))
+	smoother.r.= zero(Float64)
+	smoother.N.= zero(Float64)
 	
 	# Smoother
 	@inbounds @fastmath for t in T_len:-1:1
@@ -658,39 +851,83 @@ function kalman_smoother_cov!(smoother::Smoother, filter::WoodburyFilter,
         K_t= view(filter.K,:,:,t)
 		
 		# Lₜ
-		computeL!(L, K_t, sys.Z, sys.T)
+		computeL!(smoother.L, K_t, sys.Z, sys.T)
 		
 		# Backward recursion state
-		back_state!(r, L, Fi_t, v_t, sys.Z, tmp_n, tmp_p)
+		back_state!(smoother.r, smoother.L, Fi_t, v_t, sys.Z, tmp_n, tmp_p)
 		
 		# Backward recursion state variance
-		back_state_var!(N, L, Fi_t, sys.Z, tmp_np, tmp_pp)
+		back_state_var!(smoother.N, smoother.L, Fi_t, sys.Z, tmp_np, tmp_pp)
 		
 		# Smoothed states
-		smooth_state!(α_t, a_t, P_t, r)
+		smooth_state!(α_t, a_t, P_t, smoother.r)
 		
 		# Smoothed states autocovariance
-		smooth_state_cov!(smoother.V, N, L, P_t, t, h, tmp_pp, tmp1_pp)
+		smooth_state_cov!(smoother.V, smoother.N, smoother.L, P_t, t, h, tmp_pp, tmp1_pp)
+	end
+	
+	return nothing
+end
+
+function kalman_smoother_cov!(smoother::Smoother, filter::WoodburyFilter, 
+								sys::LinearTimeVariant; h::Integer=1)
+	# Get dims
+	(p,n,T_len)= size(filter.K)
+	
+    # Initialize temp. containers
+    tmp_n= Vector{Float64}(undef, n)
+    tmp_p= Vector{Float64}(undef, p)
+	tmp_np= Matrix{Float64}(undef, (n,p))
+	tmp_pp= Matrix{Float64}(undef, (p,p))
+	tmp1_pp= Matrix{Float64}(undef, (p,p))
+	
+	# Initialize smoother
+	smoother.r.= zero(Float64)
+	smoother.N.= zero(Float64)
+	
+	# Smoother
+	@inbounds @fastmath for t in T_len:-1:1
+        # Store views
+		α_t= view(smoother.α,:,t)
+        a_t= view(filter.a,:,t)
+		P_t= view(filter.P,:,:,t)
+        v_t= view(filter.v,:,t)
+        Fi_t= view(filter.Fi,:,:,t)
+        K_t= view(filter.K,:,:,t)
+		
+		# Lₜ
+		computeL!(smoother.L, K_t, sys.Z[t], sys.T[t])
+		
+		# Backward recursion state
+		back_state!(smoother.r, smoother.L, Fi_t, v_t, sys.Z[t], tmp_n, tmp_p)
+		
+		# Backward recursion state variance
+		back_state_var!(smoother.N, smoother.L, Fi_t, sys.Z[t], tmp_np, tmp_pp)
+		
+		# Smoothed states
+		smooth_state!(α_t, a_t, P_t, smoother.r)
+		
+		# Smoothed states autocovariance
+		smooth_state_cov!(smoother.V, smoother.N, smoother.L, P_t, t, h, tmp_pp, tmp1_pp)
 	end
 	
 	return nothing
 end
 
 function kalman_smoother_cov!(smoother::Smoother, filter::UnivariateFilter, 
-								sys::StateSpaceSystem; h::Integer=1)
+								sys::LinearTimeInvariant; h::Integer=1)
 	# Get dims
 	(p,n,T_len)= size(filter.K)
 	
     # Initialize temp. containers
-	L= Matrix{Float64}(undef, (p,p))
 	L_i= Matrix{Float64}(undef, (p,p))
     tmp_p= Vector{Float64}(undef, p)
 	tmp_pp= Matrix{Float64}(undef, (p,p))
 	tmp1_pp= Matrix{Float64}(undef, (p,p))
 	
 	# Initialize smoother
-	r= zeros(Float64, p)
-	N= zeros(Float64, (p,p))
+	smoother.r.= zero(Float64)
+	smoother.N.= zero(Float64)
 	
 	# Tranpose
 	Zt= transpose(sys.Z)
@@ -703,8 +940,8 @@ function kalman_smoother_cov!(smoother::Smoother, filter::UnivariateFilter,
 		P_t= view(filter.P,:,:,1,t)
 		
 		# Time transitions
-		transition!(r, sys.T, 'T', tmp_p)
-		transition2!(N, sys.T, tmp_pp)
+		transition!(smoother.r, sys.T, 'T', tmp_p)
+		transition2!(smoother.N, sys.T, tmp_pp)
 		
 		for i in n:-1:1
 			# Store views
@@ -715,24 +952,85 @@ function kalman_smoother_cov!(smoother::Smoother, filter::UnivariateFilter,
 			computeL_eq!(L_i, K_it, Z_i)
 			
 			# Lₜᵢｘ...ｘLₜ₁
-			copyto!(tmp_pp, L)
-			mul!(L, tmp_pp, L_i)
+			copyto!(tmp_pp, smoother.L)
+			mul!(smoother.L, tmp_pp, L_i)
 			
 			# Backward recursion state
-			back_state_eq!(r, L_i, filter.F[i,t], filter.v[i,t], Z_i, tmp_p)
+			back_state_eq!(smoother.r, L_i, filter.F[i,t], filter.v[i,t], Z_i, tmp_p)
 		
 			# Backward recursion state variance
-			back_state_var_eq!(N, L_i, filter.F[i,t], Z_i, tmp_pp)
+			back_state_var_eq!(smoother.N, L_i, filter.F[i,t], Z_i, tmp_pp)
 		end
 		
 		# Lₜ = TｘLₜₙｘ...ｘLₜ₁
-		transition!(L, sys.T, 'N', tmp_pp)
+		transition!(smoother.L, sys.T, 'N', tmp_pp)
 		
 		# Smoothed states
-		smooth_state!(α_t, a_t, P_t, r)
+		smooth_state!(α_t, a_t, P_t, smoother.r)
 		
 		# Smoothed states autocovariance
-		smooth_state_cov!(smoother.V, N, L, P_t, t, h, tmp_pp, tmp1_pp)
+		smooth_state_cov!(smoother.V, smoother.N, smoother.L, P_t, t, h, tmp_pp, tmp1_pp)
+	end
+	
+	return nothing
+end
+
+function kalman_smoother_cov!(smoother::Smoother, filter::UnivariateFilter, 
+								sys::LinearTimeVariant; h::Integer=1)
+	# Get dims
+	(p,n,T_len)= size(filter.K)
+	
+    # Initialize temp. containers
+	L_i= Matrix{Float64}(undef, (p,p))
+    tmp_p= Vector{Float64}(undef, p)
+	tmp_pp= Matrix{Float64}(undef, (p,p))
+	tmp1_pp= Matrix{Float64}(undef, (p,p))
+	
+	# Initialize smoother
+	smoother.r.= zero(Float64)
+	smoother.N.= zero(Float64)
+	
+	# Smoother
+	@inbounds @fastmath for	t in T_len:-1:1
+		# store
+		Z_t= sys.Z[t]
+
+		# Store views
+		α_t= view(smoother.α,:,t)
+        a_t= view(filter.a,:,1,t)
+		P_t= view(filter.P,:,:,1,t)
+		
+		# Time transitions
+		transition!(smoother.r, sys.T[t], 'T', tmp_p)
+		transition2!(smoother.N, sys.T[t], tmp_pp)
+		
+		for i in n:-1:1
+			# Store views
+	        K_it= view(filter.K,:,i,t)
+			Z_it= view(Z_t,i,:)
+			
+			# Lₜᵢ
+			computeL_eq!(L_i, K_it, Z_it)
+			
+			# Lₜᵢｘ...ｘLₜ₁
+			copyto!(tmp_pp, smoother.L)
+			mul!(smoother.L, tmp_pp, L_i)
+			
+			# Backward recursion state
+			back_state_eq!(smoother.r, L_i, filter.F[i,t], filter.v[i,t], Z_it, tmp_p)
+		
+			# Backward recursion state variance
+			back_state_var_eq!(smoother.N, L_i, filter.F[i,t], Z_it, tmp_pp)
+		end
+		
+		# Lₜ = TｘLₜₙｘ...ｘLₜ₁
+		transition!(smoother.L, sys.T[t], 'N', tmp_pp)
+		
+		# Smoothed states
+		smooth_state!(α_t, a_t, P_t, smoother.r)
+		
+		# Smoothed states autocovariance
+		smooth_state_cov!(smoother.V, smoother.N, smoother.L, P_t, t, h, tmp_pp, tmp1_pp)
 	end
 	
 	return nothing

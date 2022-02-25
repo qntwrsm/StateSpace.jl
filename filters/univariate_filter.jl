@@ -129,7 +129,7 @@ results in `filter`.
 #### Returns
   - `filter::UnivariateFilter`	: Kalman filter output
 """
-function kalman_filter!(filter::UnivariateFilter, y::AbstractMatrix, sys::StateSpaceSystem)
+function kalman_filter!(filter::UnivariateFilter, y::AbstractMatrix, sys::LinearTimeInvariant)
 	# Get dims
 	(n,T_len)= size(y)
 	p= length(sys.a1)
@@ -177,6 +177,61 @@ function kalman_filter!(filter::UnivariateFilter, y::AbstractMatrix, sys::StateS
 			
 			# Predict states and variances
 			predict!(a_p, P_p, a_f, P_f, sys.T, sys.Q, sys.c, tmp_p)
+		end
+	end
+	
+	return nothing
+end
+
+function kalman_filter!(filter::UnivariateFilter, y::AbstractMatrix, sys::LinearTimeVariant)
+	# Get dims
+	(n,T_len)= size(y)
+	p= length(sys.a1)
+	
+    # Initialize temp. containers
+    tmp_p= Matrix{Float64}(undef, (p,p))
+	
+	# Initialize filter
+	filter.a[:,1,1]= sys.a1
+	filter.P[:,:,1,1]= sys.P1
+	
+	# Filter
+	@inbounds @fastmath for t in 1:T_len
+		# store
+		Z_t= sys.Z[t]
+		H_t= sys.H[t]
+		c_t= view(sys.c,:,t)
+		for i in 1:n
+	        # Store views 
+	        a_it= view(filter.a,:,i,t)
+			a_f= view(filter.a,:,i+1,t)
+			P_it= view(filter.P,:,:,i,t)
+			P_f= view(filter.P,:,:,i+1,t)
+	        K_it= view(filter.K,:,i,t)
+			Z_it= view(Z_t,i,:)
+		
+			# Forecast error
+			filter.v[i,t]= y[i,t] - dot(Z_it, a_it) - d[i,t]
+		
+			# Forecast error variance
+			filter.F[i,t]= dot(Z_i, P_it, Z_i) + H_t.diag[i]
+		
+			# Kalman gain
+			mul!(K_it, P_it, Z_it, inv(filter.F[i,t]), .0)
+		
+			# Move states and variances forward
+			forward!(a_f, P_f, a_it, P_it, K_it, filter.v[i,t], filter.F[i,t])
+		end
+		
+		if t < T_len
+			# Store views
+			a_f= view(filter.a,:,n+1,t)
+			P_f= view(filter.P,:,:,n+1,t)
+	        a_p= view(filter.a,:,1,t+1)
+			P_p= view(filter.P,:,:,1,t+1)
+			
+			# Predict states and variances
+			predict!(a_p, P_p, a_f, P_f, sys.T[t], sys.Q[t], c_t, tmp_p)
 		end
 	end
 	
