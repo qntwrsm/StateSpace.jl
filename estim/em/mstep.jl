@@ -15,17 +15,17 @@ mstep.jl
 Conditional update of model components of the linear Gaussian state space model.
 
 #### Arguments
-  - `state::EMState`    : state variables
-  - `smoother::Smoother`: Kalman smoother output
-  - `fixed::NamedTuple` : fixed hyper parameters
+  - `state::EMOptimizerState` 	: state variables
+  - `smoother::Smoother`		: Kalman smoother output
+  - `fixed::NamedTuple` 		: fixed hyper parameters
 
 #### Returns
   - `model::StateSpaceModel`: state space model
 """
-update_model!(model::StateSpaceModel, state::EMState, smoother::Smoother, fixed::NamedTuple)= nothing
+function update_model! end
 
 """
-    mstep!(state, model, smoother fixed,; ϵ_abs=1e-7, ϵ_rel=1e-3, max_iter=1000)
+    mstep!(state, model, smoother, fixed,; ϵ_abs=1e-7, ϵ_rel=1e-3, max_iter=1000)
 
 Update state and model using the maximization step of the EM algorithm.
 
@@ -44,13 +44,21 @@ function mstep!(state::EMState, model::StateSpaceModel, smoother::Smoother,
     # Get dims
     T_len= size(model.y,1)
 
+    # lag and lead smoothed states
+    α_lag= view(smoother.α,:,1:T_len-1)
+    α_lead= view(smoother.α,:,2:T_len)
+
     # Update buffer variables
-    sum!(state.V_0, view(smoother.V, :, :, 1, :))
-    mul!(state.V_0, smoother.α, transpose(smoother.α), 1., 1.)
-    sum!(state.V_1, view(smoother.V, :, :, 1, 1:T_len-1))
-    @views mul!(state.V_1, smoother.α[:,1:T_len-1], transpose(smoother.α[:,1:T_len-1]), 1., 1.)
+    # sum
+    sum!(state.V_sum, view(smoother.V, :, :, 1, :))
+    state.V_0.= state.V_sum .- view(smoother.V,:,:,1,1)
+    # variance
+    @views mul!(state.V_0, α_lead, transpose(α_lead), 1., 1.)
+    state.V_1.= state.V_sum .- view(smoother.V,:,:,1,T_len)
+    # covariance
+    @views mul!(state.V_1, α_lag, transpose(α_lag), 1., 1.)
     sum!(state.V_01, view(smoother.V, :, :, 2, 2:T_len))
-    @views mul!(state.V_01, smoother.α[:,2:T_len], transpose(smoother.α[:,1:T_len-1]), 1., 1.)
+    @views mul!(state.V_01, α_lead, transpose(α_lag), 1., 1.)
     
     # Initialize stopping flags
     abs_change= zero(eltype(state.ψ))
@@ -66,7 +74,7 @@ function mstep!(state::EMState, model::StateSpaceModel, smoother::Smoother,
         update_model!(model, state, smoother, fixed)
 
         # Update state
-        get_parameters!(state.ψ, model)
+        get_parameters!(state.ψ, model, fixed)
 
         # Store change in state
         @. state.Δ= state.ψ - state.ψ_prev_m
@@ -84,7 +92,7 @@ function mstep!(state::EMState, model::StateSpaceModel, smoother::Smoother,
 end
 
 """
-    mstep!(state, model, smoother fixed)
+    mstep!(state, model, smoother, fixed)
 
 Update state and model using the conditional maximization step of the ECM
 algorithm.
@@ -100,19 +108,27 @@ function mstep!(state::ECMState, model::StateSpaceModel, smoother::Smoother,
     # Get dims
     T_len= size(model.y,1)
 
+    # lag and lead smoothed states
+    α_lag= view(smoother.α,:,1:T_len-1)
+    α_lead= view(smoother.α,:,2:T_len)
+
     # Update buffer variables
-    sum!(state.V_0, view(smoother.V, :, :, 1, :))
-    mul!(state.V_0, smoother.α, transpose(smoother.α), 1., 1.)
-    sum!(state.V_1, view(smoother.V, :, :, 1, 1:T_len-1))
-    @views mul!(state.V_1, smoother.α[:,1:T_len-1], transpose(smoother.α[:,1:T_len-1]), 1., 1.)
+    # sum
+    sum!(state.V_sum, view(smoother.V, :, :, 1, :))
+    # variance
+    state.V_0.= state.V_sum .- view(smoother.V,:,:,1,1)
+    @views mul!(state.V_0, α_lead, transpose(α_lead), 1., 1.)
+    state.V_1.= state.V_sum .- view(smoother.V,:,:,1,T_len)
+    # covariance
+    @views mul!(state.V_1, α_lag, transpose(α_lag), 1., 1.)
     sum!(state.V_01, view(smoother.V, :, :, 2, 2:T_len))
-    @views mul!(state.V_01, smoother.α[:,2:T_len], transpose(smoother.α[:,1:T_len-1]), 1., 1.)
+    @views mul!(state.V_01, α_lead, transpose(α_lag), 1., 1.)
      
     # Update model
     update_model!(model, state, smoother, fixed)
 
     # Update state
-    get_parameters!(state.ψ, model)
+    get_parameters!(state.ψ, model, fixed)
 
     return nothing
 end
