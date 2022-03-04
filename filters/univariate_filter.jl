@@ -211,10 +211,10 @@ function kalman_filter!(filter::UnivariateFilter, y::AbstractMatrix, sys::Linear
 			Z_it= view(Z_t,i,:)
 		
 			# Forecast error
-			filter.v[i,t]= y[i,t] - dot(Z_it, a_it) - d[i,t]
+			filter.v[i,t]= y[i,t] - dot(Z_it, a_it) - sys.d[i,t]
 		
 			# Forecast error variance
-			filter.F[i,t]= dot(Z_i, P_it, Z_i) + H_t.diag[i]
+			filter.F[i,t]= dot(Z_it, P_it, Z_it) + H_t.diag[i]
 		
 			# Kalman gain
 			mul!(K_it, P_it, Z_it, inv(filter.F[i,t]), .0)
