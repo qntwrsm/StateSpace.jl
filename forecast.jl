@@ -50,14 +50,14 @@ function quad_update!(C::AbstractMatrix, X::AbstractMatrix, A::AbstractMatrix, B
 end
 
 """
-	forecast(f, mat, h)
+	forecast(filter, sys, h)
 	
 Compute ``h``-step ahead state forecasts and corresponding variances for the
 latent states as well as forecast error variances for a State Space model using
-the Kalman filter output `f`.
+the Kalman filter output `filter`.
 
 #### Arguments
-  - `f::KalmanFilter`		: Kalman filter output
+  - `filter::KalmanFilter`	: Kalman filter output
   - `sys::StateSpaceSystem`	: state space system matrices
   - `h::Integer`			: forecast horizon
 
@@ -66,10 +66,10 @@ the Kalman filter output `f`.
   - `P_h::AbstractArray`	: h-step ahead forecast variances (p x p x h)
   - `F_h::AbstractArray`	: h-step ahead forecast error variances (n x n x h)
 """
-function forecast(f::KalmanFilter, sys::StateSpaceSystem, h::Integer)
+function forecast(filter::KalmanFilter, sys::StateSpaceSystem, h::Integer)
 	# Get dimensions
-	(n,p)= size(mat.Z)
-	T_len= size(f.a,2)
+	(n,p)= size(sys.Z)
+	T_len= size(filter.a,2)
 	
 	#Initialize tmp. cont.
 	tmp_np= Matrix{Float64}(undef, (n,p))
@@ -89,34 +89,34 @@ function forecast(f::KalmanFilter, sys::StateSpaceSystem, h::Integer)
 			a_c= view(a_h,:,j-1)
 			P_c= view(P_h[:,:,j-1])
 		else
-			a_c= view(f.a,:,T_len)
-			P_c= view(f.P,:,:,T_len)
+			a_c= view(filter.a,:,T_len)
+			P_c= view(filter.P,:,:,T_len)
 		end
 		F_f= view(F_h,:,:,j)
 		
 		# Forecast
-		mul!(a_f, mat.T, a_c)
+		mul!(a_f, sys.T, a_c)
 		# Forecast variance
-		quad_update!(P_f, P_c, mat.T, mat.Q, tmp_p)
+		quad_update!(P_f, P_c, sys.T, sys.Q, tmp_p)
 		# Forecast error variance
-		quad_update!(F_f, P_f, mat.Z, mat.H, tmp_np)
+		quad_update!(F_f, P_f, sys.Z, sys.H, tmp_np)
 	end
 	
 	return (a_h, P_h, F_h)
 end
 
 """
-	forecast!(a_h, P_h, F_h, f, mat, h)
+	forecast!(a_h, P_h, F_h, filter, sys, h)
 	
 Compute ``h``-step ahead state forecasts and corresponding variances for the
 latent states as well as forecast error variances for a State Space model and
 storing them in `a_h`, `P_h`, and `F_h`. See also `forecast`.
 """
 function forecast!(a_h::AbstractMatrix, P_h::AbstractArray, F_h::AbstractArray, 
-					f::KalmanFilter, sys::StateSpaceSystem, h::Integer)
+					filter::KalmanFilter, sys::StateSpaceSystem, h::Integer)
 	# Get dimensions
-	(n,p)= size(mat.Z)
-	T_len= size(f.a,2)
+	(n,p)= size(sys.Z)
+	T_len= size(filter.a,2)
 
 	#Initialize tmp. cont.
 	tmp_np= Matrix{Float64}(undef, (n,p))
@@ -131,17 +131,17 @@ function forecast!(a_h::AbstractMatrix, P_h::AbstractArray, F_h::AbstractArray,
 			a_c= view(a_h,:,j-1)
 			P_c= view(P_h[:,:,j-1])
 		else
-			a_c= view(f.a,:,T_len)
-			P_c= view(f.P,:,:,T_len)
+			a_c= view(filter.a,:,T_len)
+			P_c= view(filter.P,:,:,T_len)
 		end
 		F_f= view(F_h,:,:,j)
 
 		# Forecast
-		mul!(a_f, mat.T, a_c)
+		mul!(a_f, sys.T, a_c)
 		# Forecast variance
-		quad_update!(P_f, P_c, mat.T, mat.Q, tmp_p)
+		quad_update!(P_f, P_c, sys.T, sys.Q, tmp_p)
 		# Forecast error variance
-		quad_update!(F_f, P_f, mat.Z, mat.H, tmp_np)
+		quad_update!(F_f, P_f, sys.Z, sys.H, tmp_np)
 	end
 
 	return nothing
