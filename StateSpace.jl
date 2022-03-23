@@ -14,13 +14,12 @@ StateSpace.jl
 
 module StateSpace
 
-push!(LOAD_PATH, "/Users/quintwiersma/Dropbox/VU/PhD/code/jllib/ProximalMethods/")
-
 using 	LinearAlgebra, 
 		Statistics, 
 		Optim, 
 		ProximalMethods, 
-		FiniteDifferences
+		FiniteDifferences,
+        MultivariateStats
 
 export 
 # Structs
@@ -76,9 +75,6 @@ abstract type KalmanSmoother end
 Abstract type for state space models.
 """
 abstract type StateSpaceModel end
-
-# pca
-include("../misc/stats/pca.jl")
 
 # Include programs
 # System

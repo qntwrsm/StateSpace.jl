@@ -263,7 +263,9 @@ end
 
 function init_model!(model::DynamicFactorModel, init::NamedTuple)
     # Principal component analysis
-    (pc, loadings)= pca(model.y, model.r)
+    M= fit(PCA, model.y, maxoutdim=model.r)
+    loadings= projection(M)
+    pc= transform(M, model.y)
 
     # residuals
     resid(model).= model.y
