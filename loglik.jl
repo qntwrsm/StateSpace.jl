@@ -28,7 +28,7 @@ function loglik(filter::MultivariateFilter)
 	tmp_n= Vector{Float64}(undef, n)
 
     # Initialize log-likelihood
-    ll= -log(2*pi)*T_len*n
+    ll= -log(2*π)*T_len*n
 
     # Log-likelihood
     @inbounds @fastmath for t in 1:T_len
@@ -59,7 +59,7 @@ function loglik(filter::WoodburyFilter)
 	tmp= Matrix{Float64}(undef, (n,n))
 
     # Initialize log-likelihood
-    ll= -log(2*pi)*T_len*n
+    ll= -log(2*π)*T_len*n
 
     # Log-likelihood
     @inbounds @fastmath for t in 1:T_len
@@ -88,11 +88,11 @@ function loglik(filter::UnivariateFilter)
     @inbounds @fastmath for t in 1:T_len
 		for i in 1:n
 			F_it= filter.F[i,t]
-			if F_it > zero(F_it)
-				ll-= .5*(log(2*pi) + log(F_it) + filter.v[i,t]^2*inv(F_it))
+			if F_it ≠ zero(F_it)
+				ll-= log(2*π) + log(F_it) + filter.v[i,t]^2 * inv(F_it)
 			end
 		end
-    end		
+    end
 		
-	return ll
+	return .5*ll
 end
