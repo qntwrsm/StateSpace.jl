@@ -9,14 +9,7 @@ state_space.jl
 =#
 
 """
-    StateSpaceModel
-
-Abstract type for state space models.
-"""
-abstract type StateSpaceModel end
-
-"""
-    number_parameters(model)
+    nparams(model)
 
 Determine the number of hyper parameters.
 
@@ -26,10 +19,10 @@ Determine the number of hyper parameters.
 #### Returns
   - `n_params::Integer` : number of hyper parameters
 """
-number_parameters(model::StateSpaceModel)= nothing
+function nparams end
 
 """
-    get_parameters!(ψ, model)
+	get_params!(ψ, model)
 
 Retrieve hyper parameters from the state space model and store them in `ψ`.
 
@@ -39,81 +32,82 @@ Retrieve hyper parameters from the state space model and store them in `ψ`.
 #### Returns
   - `ψ::AbstractVector`     : hyper parameters 
 """
-get_parameters!(ψ::AbstractVector, model::StateSpaceModel)= nothing
+function get_params! end
 
 """
-    store_parameters!(model, ψ)
+    store_params!(model, ψ)
 
 Store hyper parameters `ψ` from the state space model in `model`.
 
 #### Arguments
-  - `ψ::AbstractVector`     : hyper parameters 
+  - `ψ::AbstractVector`     : hyper parameters
 
 #### Returns
   - `model::StateSpaceModel`: state space model 
 """
-store_parameters!(model::StateSpaceModel, ψ::AbstractVector)= nothing
+function store_params! end
 
 """
-    get_system!(sys, model)
+    get_system!(sys, model, method)
 
 Retrieve system matrices from the state space model and store them in `sys`.
 
 #### Arguments
   - `model::StateSpaceModel`: state space model
+  - `method::Symbol`		: filtering method        
 
 #### Returns
   - `sys::StateSpaceSystem` : state space system matrices
 """
-get_system!(sys::StateSpaceSystem, model::StateSpaceModel)= nothing
+function get_system! end
 
 """
-    store_system!(model, sys)
-
-Store system matrices from the state space model in `model`.
-
-#### Arguments
-  - `sys::StateSpaceSystem` : state space system matrices
-
-#### Returns
-  - `model::StateSpaceModel`: state space model
-"""
-store_system!(model::StateSpaceModel, sys::StateSpaceSystem)= nothing 
-
-"""
-    init!(model, fixed, constraints)
+    init!(model, init, method)
 
 Initialize the state space model hyper parameters as defined by `model` and the
 initial conditions of the state space model in `sys`.
 
 #### Arguments
-  - `fixed::NamedTuple`			: fixed hyper parameters
-  - `constraints::NamedTuple` 	: constraints
+  - `init::NamedTuple`	: initial hyper parameters
+  - `method::Symbol`	: filtering method
 
 #### Returns
   - `model::StateSpaceModel`: state space model
   - `sys::StateSpaceSystem` : state space system matrices
 """
-init!(model::StateSpaceModel, fixed::NamedTuple, constraints::NamedTuple)= nothing
+function init! end
 
 """
-    init_model!(model, fixed, constraints)
+    init_model!(model, init)
 
 Initialize the state space model hyper parameters.
 
 #### Arguments
-  - `fixed::NamedTuple`			: fixed hyper parameters
-  - `constraints::NamedTuple` 	: constraints
+  - `init::NamedTuple`	: initial hyper parameters
 
 #### Returns
   - `model::StateSpaceModel`: state space model
 """
-init_model!(model::StateSpaceModel, fixed::NamedTuple, constraints::NamedTuple)= nothing
+function init_model! end
+
+"""
+    fix_system!(sys, model, method)
+
+Fix state space system components.
+
+#### Arguments
+  - `model::StateSpaceModel`: state space model
+  - `method::Symbol`		: filtering method
+
+#### Returns
+  - `sys::StateSpaceSystem` : state space system matrices
+"""
+function fix_system! end
 
 """
     init_system!(sys, model)
 
-Initialize the state space model hyper parameters.
+Initialize state space system.
 
 #### Arguments
   - `model::StateSpaceModel`: state space model
@@ -121,20 +115,22 @@ Initialize the state space model hyper parameters.
 #### Returns
   - `sys::StateSpaceSystem` : state space system matrices
 """
-init_system!(sys::StateSpaceSystem, model::StateSpaceModel)= nothing
+function init_system! end
 
 """
-	update_model!(model, state, smoother, fixed)
+	loglik(filter, sys, model, method)
 
-Update state space model hyper parameters, as part of the EM algorithm, storing
-the results in `model`.
+Compute the log-likelihood for a linear Gaussian State Space model, given by
+`model`, with Kalman filter output `filter`, based on filtering method
+(`method`).
 
 #### Arguments
-  - `state::EMState`	: state variables
-  - `smoother::Smoother`: Kalman smoother output
-  - `fixed::NamedTuple`	: fixed hyper parameters
+  - `filter::KalmanFilter`	: Kalman filter output
+  - `sys::StateSpaceSystem` : state space system matrices
+  - `model::StateSpaceModel`: state space model
+  - `method::Symbol`		: filtering method
 
 #### Returns
-  - `model::StateSpaceModel`: state space model
+  - `ll::Real`	: log-likelihood 
 """
-update_model!(model::StateSpaceModel, state::EMState, smoother::Smoother, fixed::NamedTuple)= nothing
+function loglik end
