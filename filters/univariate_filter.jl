@@ -38,9 +38,10 @@ univariate treatment, storing the result in `a_f` and `P_f`.
 function forward!(a_f::AbstractVector, P_f::AbstractMatrix, a_i::AbstractVector, 
 						P_i::AbstractMatrix, K_i::AbstractVector, v::Real, F::Real)
 	# aᵢ₊₁ = aᵢ + vｘKᵢ
-	@. a_f= a_i + v*K_i
-	# Pᵢ₊₁ = Pᵢ - KᵢｘKᵢ'/F
-	@. P_f= P_i - inv(F)*K_i*transpose(K_i)
+	a_f.= a_i .+ v .* K_i
+
+	# Pᵢ₊₁ = Pᵢ - KᵢｘKᵢ'×F
+	P_f.= P_i .- F .* K_i .* transpose(K_i)
 	
 	return nothing
 end
@@ -76,7 +77,7 @@ function predict!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVector,
 	# TｘPₜｘT'
 	mul!(P_p, T, tmp)
 	# Pₜ₊₁ = TｘPₜｘT' + Q
-	@. P_p+= Q
+	P_p.+= Q
 	
 	return nothing
 end
@@ -102,36 +103,34 @@ function predict!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVector,
 end
 
 function predict!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVector, 
-						P_t::AbstractMatrix, T::Diagonal, Q::AbstractMatrix, 
+						P_t::AbstractMatrix, T::Diagonal, Q::Diagonal, 
 						c::AbstractVector, tmp::AbstractMatrix)
 	# Predict states
-	@. a_p= T.diag*a_t + c
+	a_p.= T.diag .* a_t .+ c
 
 	# Predict states variance
-	@. P_p= T.diag*P_t*transpose(T.diag) + mat.Q
+	P_p.= T.diag .* P_t .* transpose(T.diag) .+ Q
 	
 	return nothing
 end
 
 """
-	kalman_filter!(filter, y, mat) 
+	kalman_filter!(filter, sys) 
 	
 Compute predicted states ``a`` and forecast errors ``v`` with corresponding
 variances ``P`` and ``F`` and Kalman gain ``K`` for a linear Gaussian State
-Space model with system matrices `sys` and data `y` using the
-equation-by-equation or univariate version of the Kalman filter, storing the
-results in `filter`.
+Space model with system matrices `sys` using the equation-by-equation or
+univariate version of the Kalman filter, storing the results in `filter`.
 
 #### Arguments
-  - `y::AbstractMatrix`		: data (n x T)
   - `sys::StateSpaceSystem`	: state space system matrices
     
 #### Returns
   - `filter::UnivariateFilter`	: Kalman filter output
 """
-function kalman_filter!(filter::UnivariateFilter, y::AbstractMatrix, sys::LinearTimeInvariant)
+function kalman_filter!(filter::UnivariateFilter, sys::LinearTimeInvariant)
 	# Get dims
-	(n,T_len)= size(y)
+	(n,T_len)= size(sys.y)
 	p= length(sys.a1)
 	
     # Initialize temp. containers
@@ -156,7 +155,7 @@ function kalman_filter!(filter::UnivariateFilter, y::AbstractMatrix, sys::Linear
 			Z_i= view(Zt,:,i)
 		
 			# Forecast error
-			filter.v[i,t]= y[i,t] - dot(Z_i, a_it) - sys.d[i]
+			filter.v[i,t]= sys.y[i,t] - dot(Z_i, a_it) - sys.d[i]
 		
 			# Forecast error variance
 			filter.F[i,t]= dot(Z_i, P_it, Z_i) + sys.H.diag[i]
@@ -183,9 +182,9 @@ function kalman_filter!(filter::UnivariateFilter, y::AbstractMatrix, sys::Linear
 	return nothing
 end
 
-function kalman_filter!(filter::UnivariateFilter, y::AbstractMatrix, sys::LinearTimeVariant)
+function kalman_filter!(filter::UnivariateFilter, sys::LinearTimeVariant)
 	# Get dims
-	(n,T_len)= size(y)
+	(n,T_len)= size(sys.y)
 	p= length(sys.a1)
 	
     # Initialize temp. containers
@@ -211,7 +210,7 @@ function kalman_filter!(filter::UnivariateFilter, y::AbstractMatrix, sys::Linear
 			Z_it= view(Z_t,i,:)
 		
 			# Forecast error
-			filter.v[i,t]= y[i,t] - dot(Z_it, a_it) - sys.d[i,t]
+			filter.v[i,t]= sys.y[i,t] - dot(Z_it, a_it) - sys.d[i,t]
 		
 			# Forecast error variance
 			filter.F[i,t]= dot(Z_it, P_it, Z_it) + H_t.diag[i]
