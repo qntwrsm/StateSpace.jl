@@ -21,7 +21,8 @@ Constructor for a linear time invariant instance of the state space system type
 with system matrices ``Z``, ``T``, ``d``, ``c``, ``H``, and ``Q`` and
 initialization of the Kalman filter ``a₁`` and ``P₁``.
 """
-struct LinearTimeInvariant{TZ, TT, Td, Tc, TH, TQ, Ta, TP} <: StateSpaceSystem
+struct LinearTimeInvariant{Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP} <: StateSpaceSystem
+	y::Ty	# data
 	Z::TZ	# system matrix Z
 	T::TT	# system matrix T
 	d::Td	# mean adjustment observation
@@ -32,7 +33,10 @@ struct LinearTimeInvariant{TZ, TT, Td, Tc, TH, TQ, Ta, TP} <: StateSpaceSystem
 	P1::TP	# initial state variance
 end
 # Constructor
-function LinearTimeInvariant{TZ, TT, Td, Tc, TH, TQ, Ta, TP}(n::Integer, p::Integer) where {TZ, TT, Td, Tc, TH, TQ, Ta, TP}
+function LinearTimeInvariant{Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP}(n::Integer, p::Integer, T_len::Integer) where {Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP}
+	# data
+	y= Ty(undef, n, T_len)
+
     # Initialize system components
     Z= TZ(undef, n, p)
     T= TT <: Diagonal ? TT(undef, p) : TT(undef, p, p)
@@ -40,10 +44,12 @@ function LinearTimeInvariant{TZ, TT, Td, Tc, TH, TQ, Ta, TP}(n::Integer, p::Inte
 	c= Tc(undef, p)
     H= TH <: Diagonal ? TH(undef, n) : Symmetric(Matrix{eltype(TH)}(undef, n, n))
     Q= TQ <: Diagonal ? TQ(undef, p) : Symmetric(Matrix{eltype(TQ)}(undef, p, p))
+
+	# Initial conditions
 	a1= similar(Ta, p)
 	P1= TP <: Diagonal ? TP(undef, p) : Symmetric(Matrix{eltype(TP)}(undef, p, p))
 
-    return LinearTimeInvariant(Z, T, d, c, H, Q, a1, P1)
+    return LinearTimeInvariant(y, Z, T, d, c, H, Q, a1, P1)
 end
 
 """
@@ -53,7 +59,8 @@ Constructor for a linear time variant instance of the state space system type
 with system matrices ``Zₜ``, ``Tₜ``, ``dₜ``, ``cₜ``, ``Hₜ``, and ``Qₜ`` and
 initialization of the Kalman filter ``a₁`` and ``P₁``.
 """
-struct LinearTimeVariant{TZ, TT, Td, Tc, TH, TQ, Ta, TP} <: StateSpaceSystem
+struct LinearTimeVariant{Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP} <: StateSpaceSystem
+	y::Ty	# data
 	Z::TZ	# system matrices Zₜ
 	T::TT	# system matrices Tₜ
 	d::Td	# mean adjustments observation
@@ -64,7 +71,10 @@ struct LinearTimeVariant{TZ, TT, Td, Tc, TH, TQ, Ta, TP} <: StateSpaceSystem
 	P1::TP	# initial state variance
 end
 # Constructor
-function LinearTimeVariant{TZ, TT, Td, Tc, TH, TQ, Ta, TP}(n::Integer, p::Integer, T_len::Integer) where {TZ, TT, Td, Tc, TH, TQ, Ta, TP}
+function LinearTimeVariant{Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP}(n::Integer, p::Integer, T_len::Integer) where {Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP}
+	# data
+	y= Ty(undef, n, T_len)
+
     # Initialize system components
     Z= [TZ(undef, n, p) for _ in 1:T_len]
     T= TT <: Diagonal ? [TT(undef, p) for _ in 1:T_len] : 
@@ -75,8 +85,10 @@ function LinearTimeVariant{TZ, TT, Td, Tc, TH, TQ, Ta, TP}(n::Integer, p::Intege
                         [Symmetric(Matrix{eltype(TH)}(undef, n, n)) for _ in 1:T_len]
     Q= TQ <: Diagonal ? [TQ(undef, p) for _ in 1:T_len] : 
                         [Symmetric(Matrix{eltype(TQ)}(undef, p, p)) for _ in 1:T_len]
+
+	# Initial conditions
 	a1= similar(Ta, p)
 	P1= TP <: Diagonal ? TP(undef, p) : Symmetric(Matrix{eltype(TP)}(undef, p, p))
 
-    return LinearTimeVariant(Z, T, d, c, H, Q, a1, P1)
+    return LinearTimeVariant(y, Z, T, d, c, H, Q, a1, P1)
 end
