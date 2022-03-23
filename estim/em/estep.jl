@@ -10,23 +10,21 @@ estep.jl
 =#
 
 """
-    estep!(smoother, filter, y, sys)
+    estep!(smoother, filter, sys)
 
 Perform expectation step of the joint log-likelihood of the linear Gaussian
 State Space model as part of the EM algorithm.
 
 #### Arguments
-  - `y::AbstractMatrix`		: data (n x T)
   - `sys::StateSpaceSystem` : state space system matrices
 
 #### Returns
   - `filter::KalmanFilter`  : Kalman filter output
   - `smoother::Smoother`    : Kalman smoother output
 """
-function estep!(smoother::Smoother, filter::KalmanFilter, y::AbstractMatrix, 
-				sys::StateSpaceSystem)
+function estep!(smoother::Smoother, filter::KalmanFilter, sys::StateSpaceSystem)
 	# Run filter
-    kalman_filter!(filter, y, sys)
+    kalman_filter!(filter, sys)
 	# Run smoother
     kalman_smoother_cov!(smoother, filter, sys)
 

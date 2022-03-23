@@ -42,7 +42,7 @@ function mstep!(state::EMState, model::StateSpaceModel, smoother::Smoother,
                 fixed::NamedTuple; 
                 ϵ_abs::Real=1e-7, ϵ_rel::Real=1e-3, max_iter::Integer=1000)
     # Get dims
-    T_len= size(model.y,1)
+    T_len= size(model.y,2)
 
     # lag and lead smoothed states
     α_lag= view(smoother.α,:,1:T_len-1)
@@ -51,22 +51,24 @@ function mstep!(state::EMState, model::StateSpaceModel, smoother::Smoother,
     # Update buffer variables
     # sum
     sum!(state.V_sum, view(smoother.V, :, :, 1, :))
-    state.V_0.= state.V_sum .- view(smoother.V,:,:,1,1)
     # variance
-    @views mul!(state.V_0, α_lead, transpose(α_lead), 1., 1.)
+    # lead
+    state.V_0.= state.V_sum .- view(smoother.V,:,:,1,1)
+    mul!(state.V_0, α_lead, transpose(α_lead), 1., 1.)
+    # lag
     state.V_1.= state.V_sum .- view(smoother.V,:,:,1,T_len)
+    mul!(state.V_1, α_lag, transpose(α_lag), 1., 1.)
     # covariance
-    @views mul!(state.V_1, α_lag, transpose(α_lag), 1., 1.)
     sum!(state.V_01, view(smoother.V, :, :, 2, 2:T_len))
-    @views mul!(state.V_01, α_lead, transpose(α_lag), 1., 1.)
+    mul!(state.V_01, α_lead, transpose(α_lag), 1., 1.)
     
     # Initialize stopping flags
-    abs_change= zero(eltype(state.ψ))
-    rel_change= zero(eltype(state.ψ))
+    abs_change= Inf
+    rel_change= Inf
     # Initialize iteration counter
     iter= 1
     # M-step (maximization)
-    while (abs_change < ϵ_abs || rel_change < ϵ_rel) && iter < max_iter
+    while (abs_change > ϵ_abs && rel_change > ϵ_rel) && iter < max_iter
         # Store current parameters
         copyto!(state.ψ_prev_m, state.ψ)        
 
@@ -74,10 +76,10 @@ function mstep!(state::EMState, model::StateSpaceModel, smoother::Smoother,
         update_model!(model, state, smoother, fixed)
 
         # Update state
-        get_parameters!(state.ψ, model, fixed)
+        get_params!(state.ψ, model)
 
         # Store change in state
-        @. state.Δ= state.ψ - state.ψ_prev_m
+        state.Δ.= state.ψ .- state.ψ_prev_m
 
         # Absolute change
         abs_change= maximum(abs, state.Δ)
@@ -104,9 +106,9 @@ algorithm.
   - `fixed::NamedTuple`     : fixed hyper parameters
 """
 function mstep!(state::ECMState, model::StateSpaceModel, smoother::Smoother,
-                fixed::NamedTuple)
+                pen::NamedTuple)
     # Get dims
-    T_len= size(model.y,1)
+    T_len= size(model.y,2)
 
     # lag and lead smoothed states
     α_lag= view(smoother.α,:,1:T_len-1)
@@ -116,19 +118,21 @@ function mstep!(state::ECMState, model::StateSpaceModel, smoother::Smoother,
     # sum
     sum!(state.V_sum, view(smoother.V, :, :, 1, :))
     # variance
+    # lead
     state.V_0.= state.V_sum .- view(smoother.V,:,:,1,1)
-    @views mul!(state.V_0, α_lead, transpose(α_lead), 1., 1.)
+    mul!(state.V_0, α_lead, transpose(α_lead), 1., 1.)
+    # lag
     state.V_1.= state.V_sum .- view(smoother.V,:,:,1,T_len)
+    mul!(state.V_1, α_lag, transpose(α_lag), 1., 1.)
     # covariance
-    @views mul!(state.V_1, α_lag, transpose(α_lag), 1., 1.)
     sum!(state.V_01, view(smoother.V, :, :, 2, 2:T_len))
-    @views mul!(state.V_01, α_lead, transpose(α_lag), 1., 1.)
-     
+    mul!(state.V_01, α_lead, transpose(α_lag), 1., 1.)
+
     # Update model
-    update_model!(model, state, smoother, fixed)
+    update_model!(model, state, smoother, pen)
 
     # Update state
-    get_parameters!(state.ψ, model, fixed)
+    get_params!(state.ψ, model)
 
     return nothing
 end
