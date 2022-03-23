@@ -34,7 +34,7 @@ function computeL!(L_t::AbstractMatrix, K_t::AbstractMatrix, Z::AbstractMatrix, 
 	# -KₜｘZ
 	mul!(L_t, K_t, Z, -1., .0)
 	# Lₜ = T - KₜｘZ
-	@. L_t+= T
+	L_t.+= T
 	
 	return nothing
 end
@@ -65,7 +65,7 @@ Compute the ``L`` matrix at time ``t`` for series ``i``, storing the result in
 """
 function computeL_eq!(L_it::AbstractMatrix, K_it::AbstractVector, Z_i::AbstractVector)
 	# -KₜᵢｘZᵢ'
-	@. L_it= -K_it*transpose(Z_i)
+	L_it.= -K_it .* transpose(Z_i)
 	# Lₜᵢ = I - KₜᵢｘZᵢ'
 	@inbounds @fastmath for i in axes(L_it,1)
 		L_it[i,i]+= 1.
@@ -101,7 +101,7 @@ function back_state!(r::AbstractVector, L_t::AbstractMatrix, Fi_t::AbstractMatri
 	# Z'ｘFₜ⁻¹ｘvₜ
 	mul!(r, transpose(Z), tmp_n)
 	# rₜ₋₁ = Z'ｘFₜ⁻¹ｘvₜ + Lₜ'ｘrₜ
-	@. r+= tmp_p
+	r.+= tmp_p
 	
 	return nothing
 end
@@ -122,7 +122,7 @@ function back_state!(r::AbstractVector, L_t::AbstractMatrix, fac::Factorization,
 	# Z'ｘFₜ⁻¹ｘvₜ
 	mul!(r, transpose(Z), tmp_n)
 	# rₜ₋₁ = Z'ｘFₜ⁻¹ｘvₜ + Lₜ'ｘrₜ
-	@. r+= tmp_p
+	r.+= tmp_p
 	
 	return nothing
 end
@@ -148,7 +148,7 @@ function back_state_eq!(r::AbstractVector, L_i::AbstractMatrix, F::Real, v::Real
 	# Lᵢ'ｘrᵢ
 	mul!(tmp_p, transpose(L_i), r)
 	# rᵢ₋₁ = Zᵢ'ｘF⁻¹ｘv + Lₜ'ｘrᵢ
-	@. r= inv(F)*v*Z_i + tmp_p
+	r.= inv(F) .* v .* Z_i .+ tmp_p
 	
 	return nothing
 end
@@ -226,7 +226,7 @@ function back_state_var_eq!(N::AbstractMatrix, L_i::AbstractMatrix, F::Real,
 	# LᵢｘNᵢｘLᵢ
 	mul!(N, transpose(L_i), tmp_pp)
 	# Nᵢ₋₁ = Zᵢ'ｘF⁻¹ｘZᵢ + LᵢｘNᵢｘLᵢ
-	@. N+= inv(F)*Z_i*transpose(Z_i)
+	N.+= inv(F) .* Z_i .* transpose(Z_i)
 	
 	return nothing
 end
@@ -263,7 +263,7 @@ end
 
 function transition!(X::AbstractVecOrMat, T::Diagonal, tT::AbstractChar, tmp::AbstractVecOrMat)	
 	# Xₜ₋₁ = TｘXₜ
-	@. X= T.diag*X
+	X.= T.diag .* X
 	
 	return nothing
 end
@@ -293,7 +293,7 @@ end
 
 function transition2!(X::AbstractMatrix, T::Diagonal, tmp::AbstractMatrix)	
 	# Xₜ₋₁ = T'ｘXₜｘT
-	@. X= T.diag*X*transpose(T.diag)
+	X.= T.diag .* X .* transpose(T.diag)
 	
 	return nothing
 end
@@ -315,7 +315,7 @@ function smooth_state!(α_t::AbstractVector, a_t::AbstractVector, P_t::AbstractM
 	# Pₜｘrₜ₋₁
 	mul!(α_t, P_t, r)
 	# αₜ = aₜ + Pₜｘrₜ₋₁
-	@. α_t+= a_t
+	α_t.+= a_t
 	
 	return nothing
 end
@@ -340,7 +340,7 @@ function smooth_state_var!(V_t::AbstractMatrix, P_t::AbstractMatrix, N::Abstract
 	# -PₜｘNₜ₋₁ｘPₜ
 	mul!(V_t, P_t, tmp, -1., .0)
 	# Vₜ = Pₜ - PₜｘNₜ₋₁ｘPₜ
-	@. V_t+= P_t 
+	V_t.+= P_t 
 	
 	return nothing
 end
@@ -377,7 +377,7 @@ function smooth_state_cov!(V::AbstractArray, N::AbstractMatrix, L::AbstractMatri
 	end
 	
 	# Loop through lags
-	for j in 0:h
+	@inbounds @fastmath for j in 0:h
 		# Store
 		V[:,:,j+1,t].= tmp_0
 		
@@ -928,16 +928,19 @@ function kalman_smoother_cov!(smoother::Smoother, filter::UnivariateFilter,
 	# Initialize smoother
 	smoother.r.= zero(Float64)
 	smoother.N.= zero(Float64)
-	
-	# Tranpose
-	Zt= transpose(sys.Z)
-	
+
 	# Smoother
 	@inbounds @fastmath for	t in T_len:-1:1
 		# Store views
 		α_t= view(smoother.α,:,t)
         a_t= view(filter.a,:,1,t)
 		P_t= view(filter.P,:,:,1,t)
+
+		# reset
+		smoother.L.= zero(Float64)
+		for i in 1:p
+			smoother.L[i,i]= one(Float64)
+		end
 		
 		# Time transitions
 		transition!(smoother.r, sys.T, 'T', tmp_p)
@@ -946,7 +949,7 @@ function kalman_smoother_cov!(smoother::Smoother, filter::UnivariateFilter,
 		for i in n:-1:1
 			# Store views
 	        K_it= view(filter.K,:,i,t)
-			Z_i= view(Zt,:,i)
+			Z_i= view(Z,i,:)
 			
 			# Lₜᵢ
 			computeL_eq!(L_i, K_it, Z_i)
@@ -999,6 +1002,12 @@ function kalman_smoother_cov!(smoother::Smoother, filter::UnivariateFilter,
 		α_t= view(smoother.α,:,t)
         a_t= view(filter.a,:,1,t)
 		P_t= view(filter.P,:,:,1,t)
+
+		# reset
+		smoother.L.= zero(Float64)
+		for i in 1:p
+			smoother.L[i,i]= one(Float64)
+		end
 		
 		# Time transitions
 		transition!(smoother.r, sys.T[t], 'T', tmp_p)
