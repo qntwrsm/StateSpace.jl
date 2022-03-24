@@ -12,6 +12,7 @@ ProximalMethods = "4206358c-74de-4262-b9b2-8440947a766f"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
+MultivariateStats = "0.9"
 julia = "1.7"
 
 [extras]
