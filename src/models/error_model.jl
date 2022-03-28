@@ -27,6 +27,17 @@ struct Independent{Tε, Tσ} <: AbstractErrorModel
     σ::Tσ   # variances
     ω::Tσ   # precisions
 end
+# Constructor
+function Independent(ε::AbstractMatrix)
+    # Get dims
+    n= size(ε, 1)
+
+    # covariance and precision vectors
+    σ= similar(ε, n)
+    ω= similar(σ)
+
+    return Independent(ε, σ, ω)
+end
 
 """
     Idiosyncratic <: AbstractErrorModel
@@ -38,6 +49,17 @@ struct Idiosyncratic{Tε, TΣ <: Symmetric} <: AbstractErrorModel
     ε::Tε   # errors
     Σ::TΣ   # covariance matrix
     Ω::TΣ   # precision matrix
+end
+# Constructor
+function Idiosyncratic(ε::AbstractMatrix)
+    # Get dims
+    n= size(ε, 1)
+
+    # covariance and precision matrices
+    Σ= Symmetric(similar(ε, n, n))
+    Ω= similar(Σ)
+
+    return Idiosyncratic(ε, Σ, Ω)
 end
 
 """
@@ -58,7 +80,7 @@ struct SpatialErrorModel{Tε, TΣ, Tρ, Tf, TW, TG, Tg, Te} <: AbstractErrorMode
     groups::Tg  # group structure
     error::Te   # idiosyncratic error specification
 end
-# Constructors
+# Constructor
 function SpatialErrorModel(ε::AbstractMatrix, ρ::AbstractVector, W::AbstractMatrix, 
                             groups::AbstractVector, error::AbstractErrorModel)
     # dims
@@ -245,8 +267,6 @@ function init_error!(model::Independent, init::NamedTuple)
             model.ω[i]= inv(model.σ[i])
         end
     end
-    model.σ.= 1.
-    model.ω.= 1.
     
     return nothing
 end
@@ -450,7 +470,6 @@ function update_error!(model::SpatialErrorModel, quad::AbstractMatrix, pen::Pena
     model.Ω.data.= transpose(model.G) * prec(model.error) * model.G
     model.Σ.= model.Ω
     LinearAlgebra.inv!(cholesky!(model.Σ))
-
 
     return nothing
 end
