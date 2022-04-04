@@ -40,6 +40,7 @@ export
 	Independent, Idiosyncratic, SpatialErrorModel,
 	NoConstant, Constant, Exogeneous,
 	DynamicFactorModel,
+    DynamicNelsonSiegelModel,
 # Filter
 	kalman_filter!,
 # Smoother
@@ -104,9 +105,12 @@ include("estim/em/estep.jl")
 
 # Models
 include("models/state_space.jl")
-# Dynamic factor models
+# error models
 include("models/error_model.jl")
+# mean models
 include("models/mean_model.jl")
+# Dynamic factor models
 include("models/dynamic_factor_model.jl")
+include("models/dynamic_nelson_siegel_model.jl")
 
 end
