@@ -12,32 +12,34 @@ dynamic_nelson_siegel_model.jl
     DynamicNelsonSiegelModel <: StateSpaceModel
 
 Constructor for a dynamic Nelson Siegel model instance of the state space model type
-with hyperparameters `λ`, `ϕ`, and error specification
+with hyperparameters `λ`, `ϕ`, and error specifications
 """
-mutable struct DynamicNelsonSiegelModel{Ty, Tτ, Tλ, Tϕ, Te} <: StateSpaceModel
-    y::Ty       # data
-    τ::Tτ       # maturities
-    λ::Tλ       # decay
-    ϕ::Tϕ       # autoregressive parameters
-    error::Te   # error specification
+mutable struct DynamicNelsonSiegelModel{Ty, Tτ, Tλ, Tϕ, Teobs, Tefac} <: StateSpaceModel
+    y::Ty               # data
+    τ::Tτ               # maturities
+    λ::Tλ               # decay
+    ϕ::Tϕ               # autoregressive parameters
+    error_obs::Teobs    # obs. eq. error specification
+    error_factor::Tefac # factor eq. error specification
 end
 # Constructors
-function DynamicNelsonSiegelModel(y::AbstractMatrix, τ::AbstractVector, error::AbstractErrorModel)    
+function DynamicNelsonSiegelModel(y::AbstractMatrix, τ::AbstractVector, 
+                                    error_obs::AbstractErrorModel, error_factor::AbstractErrorModel)    
     # hyper paremeters
     λ= .0609
     ϕ= similar(y, 3, 3)
 
-    return DynamicNelsonSiegelModel(y, τ, λ, ϕ, error)
+    return DynamicNelsonSiegelModel(y, τ, λ, ϕ, error_obs, error_factor)
 end
 
 # Methods
-cov(model::DynamicNelsonSiegelModel)= cov(model.error)
-prec(model::DynamicNelsonSiegelModel)= prec(model.error)
-resid(model::DynamicNelsonSiegelModel)= resid(model.error)
+cov(model::DynamicNelsonSiegelModel)= cov(model.error_obs)
+prec(model::DynamicNelsonSiegelModel)= prec(model.error_obs)
+resid(model::DynamicNelsonSiegelModel)= resid(model.error_obs)
 maturities(model::DynamicNelsonSiegelModel)= model.τ
 decay(model::DynamicNelsonSiegelModel)= model.λ
 
-function loadings!(Λ::AbstracMatrix, model::DynamicNelsonSiegelModel)
+function loadings!(Λ::AbstractMatrix, model::DynamicNelsonSiegelModel)
     λ= decay(model)
     τ= maturities(model)
     n= length(τ)
@@ -51,6 +53,9 @@ function loadings!(Λ::AbstracMatrix, model::DynamicNelsonSiegelModel)
     return nothing
 end
 function loadings(model::DynamicNelsonSiegelModel)
+    # get dims
+    n= length(maturities(model))
+
     Λ= Matrix{typeof(decay(model))}(undef, n, 3)
     loadings!(Λ, model)
 
@@ -58,7 +63,7 @@ function loadings(model::DynamicNelsonSiegelModel)
 end
 
 # State space system and hyperparameters
-nparams(model::DynamicNelsonSiegelModel)= 10 + nparams(model.error)
+nparams(model::DynamicNelsonSiegelModel)= 10 + nparams(model.error_obs) + nparams(model.error_factor)
 
 function get_params!(ψ::AbstractVector, model::DynamicNelsonSiegelModel)
     idx= 0  # index counter
@@ -72,8 +77,12 @@ function get_params!(ψ::AbstractVector, model::DynamicNelsonSiegelModel)
     ψ[idx+1:idx+9].= vec(model.ϕ)
     idx+= 9
 
-    # error model
-    get_params!(view(ψ,idx+1:idx+nparams(model.error)), model.error)
+    # observation equation error model
+    get_params!(view(ψ,idx+1:idx+nparams(model.error_obs)), model.error_obs)
+    idx+= nparams(model.error_obs)
+
+    # factor equation error model
+    get_params!(view(ψ,idx+1:idx+nparams(model.error_fac)), model.error_factor)
 
     return nothing
 end
@@ -83,6 +92,7 @@ function get_system!(sys::LinearTimeInvariant, model::DynamicNelsonSiegelModel, 
 
     # Store values
     sys.T.= model.ϕ
+    sys.Q.= cov(model.error_factor)
     if method === :univariate
         # Cholesky decomposition of H
         C= cholesky(cov(model))
@@ -129,8 +139,12 @@ function store_params!(model::DynamicNelsonSiegelModel, ψ::AbstractVector)
     vec(model.ϕ).= view(ψ,idx+1:idx+9)
     idx+= 9
 
-    # error model
-    store_params!(model.error, view(ψ,idx+1:idx+nparams(model.error)))
+    # observation equation error model
+    store_params!(model.error_obs, view(ψ,idx+1:idx+nparams(model.error_obs)))
+    idx+= nparams(model.error_obs)
+
+    # factor equation error model
+    store_params!(model.error_factor, view(ψ,idx+1:idx+nparams(model.error_factor)))
 
     return nothing
 end
@@ -148,6 +162,7 @@ function init!(model::DynamicNelsonSiegelModel, init::NamedTuple, method::Symbol
     Tv= Vector{Te}
     Tm= Matrix{Te}
     Td= Diagonal{Te}
+    TQ= cov(model.error_factor) isa Symmetric ? Symmetric{Te} : Td
     if method === :univariate || method === :collapsed
         TH= Td
     else
@@ -155,7 +170,7 @@ function init!(model::DynamicNelsonSiegelModel, init::NamedTuple, method::Symbol
     end
 
     # State space system
-    sys= LinearTimeInvariant{Tm, Tm, Td, Tv, Tv, TH, Td, Tv, Tm}(n, 3, T_len)
+    sys= LinearTimeInvariant{Tm, Tm, Tm, Tv, Tv, TH, TQ, Tv, Tm}(n, 3, T_len)
     fix_system!(sys, model, method)
     init_system!(sys, model)
 
@@ -196,22 +211,37 @@ function init_ϕ!(ϕ::AbstractMatrix, β::AbstractMatrix)
     # OLS
     X= view(β,:,1:T-1)
     y= view(β,:,2:T)
-    ϕ.= X \ y
+    ϕ.= y / X
 
     return nothing
 end
 
 function init_model!(model::DynamicNelsonSiegelModel, init::NamedTuple)
+    # get dims
+    T= size(model.y,2) 
+
     # λ
     haskey(init, :λ) ? model.λ= init.λ : nothing
     # factors
     Λ= loadings(model)
-    β= init_factors(y, Λ)
+    β= init_factors(model.y, Λ)
+
+    # observation equation residuals
+    resid(model).= model.y
+    mul!(resid(model), Λ, β, -1., 1.)
+
     # ϕ
     haskey(init, :ϕ) ? model.ϕ.= init.ϕ : init_ϕ!(model.ϕ, β)
 
-    # error model
-    init_error!(model.error, init)
+    # factor equation residuals
+    resid(model.error_factor).= view(β,:,2:T)
+    mul!(resid(model.error_factor), model.ϕ, view(β,:,1:T-1), -1., 1.)
+
+    # observation equation error model
+    init_error!(model.error_obs, init)
+
+    # factor equation error model
+    init_error!(model.error_factor, init)
 
     return nothing
 end
@@ -226,7 +256,6 @@ function fix_system!(sys::LinearTimeInvariant, model::DynamicNelsonSiegelModel, 
     if method === :univariate || method === :collapsed
         sys.H.diag.= one(T)
     end
-    sys.Q.diag.= one(T)
     sys.d.= zero(T)
     sys.c.= zero(T)
 end
@@ -237,7 +266,7 @@ function init_system!(sys::StateSpaceSystem, model::DynamicNelsonSiegelModel)
     sys.a1.= zero(T)
     # P
     sys.P1.= zero(T)
-    @inbounds @fastmath for i in 1:model.r
+    @inbounds @fastmath for i in 1:3
         sys.P1[i,i]= one(T)
     end
     
