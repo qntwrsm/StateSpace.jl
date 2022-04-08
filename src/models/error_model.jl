@@ -276,14 +276,9 @@ function init_error!(model::Idiosyncratic, init::NamedTuple)
         model.Σ.= init.error.Σ
         model.Ω.= init.error.Ω
     else
-        model.Σ.= zero(eltype(model.Σ))
-        model.Ω.= zero(eltype(model.Ω))
-        T= size(model.ε,2)
-        @inbounds @fastmath for i in axes(model.Σ,1)
-            ε_i= view(model.ε,i,:)
-            model.Σ[i,i]= inv(T) * sum(abs2, ε_i)
-            model.Ω[i,i]= inv(model.Σ[i,i])
-        end
+        mul!(model.Σ.data, model.ε, transpose(model.ε))
+        model.Ω.= model.Σ
+        LinearAlgebra.inv!(cholesky!(model.Ω))
     end
     
     return nothing
