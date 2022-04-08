@@ -458,7 +458,7 @@ function update_error!(model::SpatialErrorModel, quad::AbstractMatrix, pen::Pena
     model.ρ.= logit.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
 
     # Penalized estimation via proximal gradient method
-    prox_grad!(model.ρ, f_cl, ∇f_cl!, prox_cl!; style="nesterov")
+    prox_grad!(model.ρ, f_cl, ∇f_cl!, prox_cl!, style="nesterov")
 
     # Transform parameters back
     model.ρ.= logistic.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)

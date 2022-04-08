@@ -263,7 +263,7 @@ end
 
 function init_model!(model::DynamicFactorModel, init::NamedTuple)
     # Principal component analysis
-    M= fit(PCA, model.y, maxoutdim=model.r)
+    M= fit(PCA, model.y, maxoutdim=model.r, pratio=1.)
     loadings= projection(M)
     pc= transform(M, model.y)
 
@@ -416,103 +416,6 @@ function update_ϕ!(model::DynamicFactorModel, state::EMOptimizerState)
 end
 
 """
-    f_Λ(λ, model, state, smoother)
-
-Compute objective function value `f` w.r.t. loading matrix ``Λ`` (average
-negative log-likelihood w.r.t. ``Λ``).
-
-#### Arguments
-  - `λ::AbstractVector`         : vectorized loading matrix
-  - `model::DynamicFactorModel` : state space model
-  - `state:::EMOptimizerState`  : state variables
-  - `smoother::Smoother`        : Kalman smoother output
-
-#### Returns
-  - `f::Real`   : objective function value
-"""
-function f_Λ(λ::AbstractVector, model::DynamicFactorModel, state::EMOptimizerState, 
-            smoother::Smoother)
-    # Get dim
-    (n,T)= size(model.y)
-
-    # reshape to matrix
-    Λ= reshape(λ, size(model.Λ))
-
-    # update residuals
-    ε= resid(model) # retrieve residual container
-    ε.= model.y .- mean(model)
-    mul!(ε, Λ, smoother.α, -1., 1.)
-
-    # error component
-    e= ε * transpose(ε)
-    # add ridge component
-    tmp= Λ * state.V_sum    # buffer
-    mul!(e, tmp, transpose(Λ), 1., 1.)
-
-    # precision matrix
-    Ω= prec(model)
-
-    # objective function
-    f= zero(eltype(λ))
-    @inbounds @fastmath for i in axes(Λ,1)
-        Ω_i= view(Ω,:,i)
-        e_i= view(e,:,i)
-        f+=  dot(Ω_i, e_i)
-    end
-
-    return f * inv(2 * T * n)
-end
-
-"""
-    ∇f_Λ!(∇f, λ, model, state, smoother)
-
-Compute gradient `∇f` of objective function `f` w.r.t. loading matrix ``Λ``
-(gradient of average negative log-likelihood w.r.t. ``Λ``).
-
-#### Arguments
-  - `λ::AbstractVector`         : vectorized loading matrix
-  - `model::DynamicFactorModel` : state space model
-  - `state:::EMOptimizerState`  : state variables
-  - `smoother::Smoother`        : Kalman smoother output
-
-#### Returns
-  - `∇f::AbstractVector`: gradient
-"""
-function ∇f_Λ!(∇f::AbstractVector, λ::AbstractVector, model::DynamicFactorModel,
-                state::EMOptimizerState, smoother::Smoother)
-    # Get dim
-    (n,T)= size(model.y)
-    
-    # reshape to matrix
-    Λ= reshape(λ, size(model.Λ))
-
-    # update residuals
-    ε= resid(model) # retrieve residual container
-    ε.= model.y .- mean(model)
-    mul!(ε, Λ, smoother.α, -1., 1.)
-
-    # buffer
-    tmp= Λ * state.V_sum
-    mul!(tmp, ε, transpose(smoother.α), -1., 1.)
-
-    # precision matrix
-    Ω= prec(model)
-
-    # gradient
-    k= 0
-    @inbounds @fastmath for j in axes(Λ,2)
-        tmp_j= view(tmp,:,j)
-        for i in axes(Λ,1)
-            k+= 1
-            Ω_i= view(Ω,:,i)
-            ∇f[k]= inv(T * n) * dot(Ω_i, tmp_j)
-        end
-    end
-
-    return nothing
-end
-
-"""
     update_Λ!(model, state, smoother, pen)
 
 Update loading matrix parameters `Λ`, storing the result in `model`.
@@ -525,14 +428,31 @@ Update loading matrix parameters `Λ`, storing the result in `model`.
 """
 function update_Λ!(model::DynamicFactorModel, state::EMOptimizerState, 
                     smoother::Smoother, pen::Penalization)
-    # Closure of functions
-    f(x::AbstractVector)= f_Λ(x, model, state, smoother)
-    # ∇f!(∇f::AbstractVector, x::AbstractVector)=  ∇f_Λ!(∇f, x, f)
-    ∇f!(∇f::AbstractVector, x::AbstractVector)=  ∇f_Λ!(∇f, x, model, state, smoother)
-    prox_op!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
+    # residuals
+    resid(model).= model.y .- mean(model)
+    # precision matrix
+    Ω= prec(model)
 
-    # Penalized estimation via proximal gradient method
-    prox_grad!(vec(model.Λ), f, ∇f!, prox_op!; style="nesterov")
+    # Gram matrix
+    α_1= view(smoother.α,:,1)
+    state.V_0.+= view(smoother.V,:,:,1,1) .+ α_1 .* transpose(α_1)
+
+    # linear coefficient b
+    b= -inv(prod(size(model.y))) * vec(Ω * resid(model) * transpose(smoother.α))
+    # I + A, with A quadratic coefficient
+    tmp= inv(prod(size(model.y))) * kron(state.V_0, Ω)
+    @inbounds @fastmath for i in axes(tmp,1)
+        tmp[i,i]+= one(eltype(tmp))
+    end
+    # Cholesky decomposition
+    C= cholesky!(Hermitian(tmp))
+
+    # Proximal operators
+    prox_g!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
+    prox_f!(x::AbstractVector, λ::Real)= shrinkage!(x, λ, C, b)
+
+    # Penalized estimation via admm
+    vec(model.Λ).= admm!(vec(model.Λ), prox_f!, prox_g!)
 
     return nothing
 end

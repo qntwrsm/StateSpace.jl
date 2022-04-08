@@ -126,95 +126,6 @@ function init_mean!(model::Exogeneous, y::AbstractMatrix, init::NamedTuple)
 end
 
 """
-    f_β(β_vec, model, init_resid!, error)
-
-Compute objective function value `f` w.r.t. slopes ``β`` (average negative
-log-likelihood w.r.t. ``β``).
-
-#### Arguments
-  - `β_vec::AbstractVector`     : vectorized slopes
-  - `model::Exogeneous`         : mean model
-  - `init_resid!::Function`     : initialize residual function
-  - `error::AbstractErrorModel` : error model
-
-#### Returns
-  - `f::Real`   : objective function value
-"""
-function f_β(β_vec::AbstractVector, model::Exogeneous, init_resid!::Function, 
-            error::AbstractErrorModel)
-    ε= resid(error) # retrieve residuals
-    Ω= prec(error) # retrieve precision matrix
-
-    # get dims
-    (n,T)= size(ε)
-
-    # reshape to matrix
-    β= reshape(β_vec, size(model.β))
-
-    # update residuals
-    init_resid!(ε)
-    mul!(ε, β, model.X, -1., 1.)
-
-    # objective function
-    f= zero(eltype(β_vec))
-    @inbounds @fastmath for t in 1:T
-        ε_t= view(ε,:,t)
-        f+= dot(ε_t, Ω, ε_t)
-    end
-
-    return f * inv(2 * T * n)
-end
-
-"""
-    ∇f_β!(∇f, β_vec, model, init_resid!, error)
-
-Compute gradient `∇f` w.r.t. slopes ``β`` (gradient of average negative
-log-likelihood w.r.t. ``β``), storing the result in `∇f`.
-
-#### Arguments
-  - `β_vec::AbstractVector`     : vectorized slopes
-  - `model::Exogeneous`         : mean model
-  - `init_resid!::Function`     : initialize residual function
-  - `error::AbstractErrorModel` : error model
-
-#### Returns
-  - `∇f::AbstractVector`    : gradient 
-"""
-function ∇f_β!(∇f::AbstractVector, β_vec::AbstractVector, model::Exogeneous, 
-            init_resid!::Function, error::AbstractErrorModel)
-    ε= resid(error) # retrieve residuals
-    Ω= prec(error)  # retrieve precision matrix
-
-    # get dims
-    (n,T)= size(ε)
-
-    # reshape to matrix
-    β= reshape(β_vec, size(model.β))
-
-    # update residuals
-    init_resid!(ε)
-    mul!(ε, β, model.X, -1., 1.)
-
-    # println("gradient ||Ω||: ", opnorm(Ω))
-
-    # buffer
-    εX= ε * transpose(model.X)
-
-    # gradient
-    k= 0
-    @inbounds @fastmath for j in axes(β,2)
-        εX_j= view(εX,:,j)
-        for i in axes(β,1)
-            k+= 1
-            Ω_i= view(Ω,:,i)
-            ∇f[k]= -inv(T * n) * dot(Ω_i, εX_j)
-        end
-    end
-
-    return nothing
-end
-
-"""
     update_mean!(model, init_resid!, error, pen)
 
 Update mean model hyper parameters, storing the results in `model`.
@@ -227,13 +138,27 @@ Update mean model hyper parameters, storing the results in `model`.
 """
 update_mean!(model::NoConstant, init_resid!::Function, error::AbstractErrorModel, pen::Penalization)= nothing
 function update_mean!(model::Exogeneous, init_resid!::Function, error::AbstractErrorModel, pen::Penalization)
-    # Closure of functions
-    f_cl(x::AbstractVector)= f_β(x, model, init_resid!, error)
-    ∇f_cl!(∇f::AbstractVector, x::AbstractVector)=  ∇f_β!(∇f, x, model, init_resid!, error)
-    prox_cl!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
+    # residuals
+    init_resid!(resid(error))
+    # precision matrix
+    Ω= prec(error)
+    
+    # linear coefficient b
+    b= -inv(prod(size(model.μ))) * vec(Ω * resid(error) * transpose(model.X))
+    # I + A, with A quadratic coefficient
+    tmp= inv(prod(size(model.μ))) * kron(model.X * transpose(model.X), Ω)
+    @inbounds @fastmath for i in axes(tmp,1)
+        tmp[i,i]+= one(eltype(tmp))
+    end
+    # Cholesky decomposition
+    C= cholesky!(Hermitian(tmp))
 
-    # Penalized estimation via proximal gradient method
-    prox_grad!(vec(model.β), f_cl, ∇f_cl!, prox_cl!; style="nesterov")
+    # Proximal operators
+    prox_g!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
+    prox_f!(x::AbstractVector, λ::Real)= shrinkage!(x, λ, C, b)
+
+    # Penalized estimation via admm
+    vec(model.β).= admm!(vec(model.β), prox_f!, prox_g!)
 
     # mean
     mean!(model)
