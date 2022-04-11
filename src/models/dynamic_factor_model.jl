@@ -206,29 +206,11 @@ end
 
 # Initialization
 function init!(model::DynamicFactorModel, init::NamedTuple, method::Symbol)
-    # get dims
-    (n,T_len)= method === :collapsed ? (model.r, size(model.y,2)) : size(model.y)
-
     # Model
     init_model!(model, init)
 
-    # types
-    Te= eltype(model.y)
-    Tv= Vector{Te}
-    Tm= Matrix{Te}
-    Td= Diagonal{Te}
-    if method === :univariate || method === :collapsed
-        TH= Td
-    else
-        TH= cov(model) isa Symmetric ? Symmetric{Te} : Td
-    end
-
     # State space system
-    if model.mean isa Exogeneous
-        sys= LinearTimeVariant{Tm, Tm, Td, Tm, Tm, TH, Td, Tv, Tm}(n, model.r, T_len)
-    else 
-        sys= LinearTimeInvariant{Tm, Tm, Td, Tv, Tv, TH, Td, Tv, Tm}(n, model.r, T_len)
-    end
+    create_system(model, method)
     fix_system!(sys, model, method)
     init_system!(sys, model)
 
@@ -288,6 +270,31 @@ function init_model!(model::DynamicFactorModel, init::NamedTuple)
     init_error!(model.error, init)
 
     return nothing
+end
+
+function create_system(model::DynamicFactorModel, method::Symbol)
+    # get dims
+    (n,T_len)= method === :collapsed ? (model.r, size(model.y,2)) : size(model.y)
+    
+    # types
+    Te= eltype(model.y)
+    Tv= Vector{Te}
+    Tm= Matrix{Te}
+    Td= Diagonal{Te}
+    if method === :univariate || method === :collapsed
+        TH= Td
+    else
+        TH= cov(model) isa Symmetric ? Symmetric{Te} : Td
+    end
+
+    # State space system
+    if model.mean isa Exogeneous
+        sys= LinearTimeVariant{Tm, Tm, Td, Tm, Tm, TH, Td, Tv, Tm}(n, model.r, T_len)
+    else 
+        sys= LinearTimeInvariant{Tm, Tm, Td, Tv, Tv, TH, Td, Tv, Tm}(n, model.r, T_len)
+    end
+
+    return sys
 end
 
 function fix_system!(sys::LinearTimeInvariant, model::DynamicFactorModel, method::Symbol)

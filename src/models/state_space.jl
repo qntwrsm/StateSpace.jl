@@ -62,6 +62,20 @@ Retrieve system matrices from the state space model and store them in `sys`.
 function get_system! end
 
 """
+    create_system(model, method)
+
+Create system matrices from the state space model.
+
+#### Arguments
+  - `model::StateSpaceModel`: state space model
+  - `method::Symbol`		: filtering method        
+
+#### Returns
+  - `sys::StateSpaceSystem` : state space system matrices
+"""
+function create_system! end
+
+"""
     init!(model, init, method)
 
 Initialize the state space model hyper parameters as defined by `model` and the

@@ -151,26 +151,11 @@ end
 
 # Initialization
 function init!(model::DynamicNelsonSiegelModel, init::NamedTuple, method::Symbol)
-    # get dims
-    (n,T_len)= method === :collapsed ? (3, size(model.y,2)) : size(model.y)
-
     # Model
     init_model!(model, init)
 
-    # types
-    Te= eltype(model.y)
-    Tv= Vector{Te}
-    Tm= Matrix{Te}
-    Td= Diagonal{Te}
-    TQ= cov(model.error_factor) isa Symmetric ? Symmetric{Te} : Td
-    if method === :univariate || method === :collapsed
-        TH= Td
-    else
-        TH= cov(model) isa Symmetric ? Symmetric{Te} : Td
-    end
-
     # State space system
-    sys= LinearTimeInvariant{Tm, Tm, Tm, Tv, Tv, TH, TQ, Tv, Tm}(n, 3, T_len)
+    create_system(model, method)
     fix_system!(sys, model, method)
     init_system!(sys, model)
 
@@ -244,6 +229,28 @@ function init_model!(model::DynamicNelsonSiegelModel, init::NamedTuple)
     init_error!(model.error_factor, init)
 
     return nothing
+end
+
+function create_system(model::DynamicNelsonSiegelModel, method::Symbol)
+    # get dims
+    (n,T_len)= method === :collapsed ? (3, size(model.y,2)) : size(model.y)
+
+    # types
+    Te= eltype(model.y)
+    Tv= Vector{Te}
+    Tm= Matrix{Te}
+    Td= Diagonal{Te}
+    TQ= cov(model.error_factor) isa Symmetric ? Symmetric{Te} : Td
+    if method === :univariate || method === :collapsed
+        TH= Td
+    else
+        TH= cov(model) isa Symmetric ? Symmetric{Te} : Td
+    end
+
+    # State space system
+    sys= LinearTimeInvariant{Tm, Tm, Tm, Tv, Tv, TH, TQ, Tv, Tm}(n, 3, T_len)
+
+    return sys
 end
 
 function fix_system!(sys::LinearTimeInvariant, model::DynamicNelsonSiegelModel, method::Symbol)
