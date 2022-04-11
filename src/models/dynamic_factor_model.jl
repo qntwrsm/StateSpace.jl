@@ -210,7 +210,7 @@ function init!(model::DynamicFactorModel, init::NamedTuple, method::Symbol)
     init_model!(model, init)
 
     # State space system
-    create_system(model, method)
+    sys= create_system(model, method)
     fix_system!(sys, model, method)
     init_system!(sys, model)
 
@@ -521,4 +521,42 @@ function update_model!(model::DynamicFactorModel, state::EMOptimizerState,
     mul!(ε, model.Λ, smoother.α, -1., 1.)
 
     return nothing
+end
+
+# Forecast
+function forecast!(y_h::AbstractMatrix, model::DynamicFactorModel, h::Integer)
+    # Get dims
+    T= size(model.y,2)
+    p= model.r
+
+    # State space system
+    sys= create_system(model, :collapsed)
+    fix_system!(sys, model, :collapsed)
+    init_system!(sys, model)
+    get_system!(sys, model, :collapsed)
+
+    # filter
+    filter= UnivariateFilter(similar(model.y, p, p+1, T), similar(model.y, p, p, p+1, T), 
+                                similar(model.y, p, T), similar(model.y, p, T),
+                                similar(model.y, p, p, T))
+    # run filter
+    kalman_filter!(filter, sys)
+
+    # forecasts
+    (a_h, _, _)= forecast(filter, sys, h)   # factors
+    forecast!(y_h, model.mean, h)    # mean
+    mul!(y_h, model.Λ, a_h, 1., 1.)
+
+    return nothing
+end
+
+function forecast(model::DynamicFactorModel, h::Integer)
+    # number of time series
+    n= size(model.y,1)
+
+    # forecasts
+    y_h= similar(model.y, n, h)
+    forecast!(y_h, model, h)
+
+    return y_h
 end

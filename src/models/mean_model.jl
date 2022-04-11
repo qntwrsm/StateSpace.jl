@@ -179,3 +179,39 @@ function update_mean!(model::Exogeneous, init_resid!::Function, error::AbstractE
 
     return nothing
 end
+
+# Forecast
+function forecast!(μ_h::AbstractMatrix, model::Exogeneous, h::Integer)
+    # get dims
+    T= size(model.μ,2)
+
+    # create lag and lead
+    X= view(model.X, :, 1:T-1) 
+    y= view(model.X, :, 2:T)
+
+    # estimate VAR(1) dynamics
+    gram= X * transpose(X)
+    C= cholesky!(Hermitian(gram))
+    ϕ= y * transpose(X)
+    rdiv!(ϕ, C)
+
+    # forecasts
+    x= copy(view(model.X, :, T))
+    x_h= similar(x)
+    for i in 1:h
+        mul!(x_h, ϕ, x)
+        mul!(view(μ_h, :, i), model.β, x_h)
+        x.= x_h
+    end
+
+    return μ_h
+end
+
+function forecast(model::Exogeneous, h::Integer)
+    # number of time series
+    n= size(model.μ,1)
+
+    # forecasts
+    μ_h= similar(model.μ, n, h)
+    forecast!(μ_h, model, h)
+end

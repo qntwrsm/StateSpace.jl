@@ -334,3 +334,39 @@ function loglik(filter::KalmanFilter, sys::StateSpaceSystem, model::DynamicNelso
 
     return ll
 end
+
+# Forecast
+function forecast!(y_h::AbstractMatrix, model::DynamicNelsonSiegelModel, h::Integer)
+    # Get dims
+    T= size(model.y,2)
+
+    # State space system
+    sys= create_system(model, :collapsed)
+    fix_system!(sys, model, :collapsed)
+    init_system!(sys, model)
+    get_system!(sys, model, :collapsed)
+
+    # filter
+    filter= UnivariateFilter(similar(model.y, 3, 4, T), similar(model.y, 3, 3, 4, T), 
+                                similar(model.y, 3, T), similar(model.y, 3, T),
+                                similar(model.y, 3, 3, T))
+    # run filter
+    kalman_filter!(filter, sys)
+
+    # forecasts
+    (a_h, _, _)= forecast(filter, sys, h)   # factors
+    mul!(y_h, loadings(model), a_h)
+
+    return nothing
+end
+
+function forecast(model::DynamicNelsonSiegelModel, h::Integer)
+    # number of time series
+    n= size(model.y,1)
+
+    # forecasts
+    y_h= similar(model.y, n, h)
+    forecast!(y_h, model, h)
+
+    return y_h
+end
