@@ -41,6 +41,10 @@ export
 	NoConstant, Constant, Exogeneous,
 	DynamicFactorModel,
     DynamicNelsonSiegelModel,
+# State space system
+    create_system,
+    init_system!,
+    fix_system!,
 # Filter
 	kalman_filter!,
 # Smoother
