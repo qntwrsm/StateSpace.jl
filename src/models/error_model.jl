@@ -276,7 +276,9 @@ function init_error!(model::Idiosyncratic, init::NamedTuple)
         model.Σ.= init.error.Σ
         model.Ω.= init.error.Ω
     else
+        T= size(model.ε,2)
         mul!(model.Σ.data, model.ε, transpose(model.ε))
+        lmul!(T, model.Σ.data)
         model.Ω.= model.Σ
         LinearAlgebra.inv!(cholesky!(model.Ω))
     end
