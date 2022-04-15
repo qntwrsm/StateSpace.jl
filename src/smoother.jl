@@ -949,7 +949,7 @@ function kalman_smoother_cov!(smoother::Smoother, filter::UnivariateFilter,
 		for i in n:-1:1
 			# Store views
 	        K_it= view(filter.K,:,i,t)
-			Z_i= view(Z,i,:)
+			Z_i= view(sys.Z,i,:)
 			
 			# Lₜᵢ
 			computeL_eq!(L_i, K_it, Z_i)
