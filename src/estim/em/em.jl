@@ -33,7 +33,7 @@ struct ECMState{Tv, Tm} <: EMOptimizerState
 end
 
 """
-    em!(model, pen; init=NamedTuple(), ϵ_abs=1e-7, ϵ_rel=1e-3, max_iter=1000)
+    em!(model, pen; init=NamedTuple(), ϵ=1e-4, max_iter=1000)
 
 Expectation-Maximization (EM) algorithm to estimate the hyper parameters of a
 linear Gaussian State Space model as defined by `model`, storing the results in
@@ -44,8 +44,7 @@ linear Gaussian State Space model as defined by `model`, storing the results in
   - `pen::NamedTuple`       : penalization parameters
   - `method::Symbol`        : filtering method
   - `init::NamedTuple`      : initial model parameters
-  - `ϵ_abs::Real`           : absolute tolerance
-  - `ϵ_rel::Real`           : relative tolerance
+  - `ϵ::Real`               : tolerance
   - `max_iter::Integer`     : max number of iterations
 
 #### Returns
@@ -53,7 +52,7 @@ linear Gaussian State Space model as defined by `model`, storing the results in
 """
 function em!(model::StateSpaceModel, pen::NamedTuple; 
             method::Symbol=:univariate, init::NamedTuple=NamedTuple(), 
-            ϵ_abs::Real=1e-7, ϵ_rel::Real=1e-3, max_iter::Integer=1000)
+            ϵ::Real=1e-4, max_iter::Integer=1000)
     # Initialize state space model and system
     sys= init!(model, init, method)
 
@@ -94,13 +93,12 @@ function em!(model::StateSpaceModel, pen::NamedTuple;
                                 similar(model.y, p, p), similar(model.y, p), 
                                 similar(model.y, p, p))
 
-    # Initialize stopping flags
-    abs_change= Inf
+    # Initialize relative change
     rel_change= Inf
     # Initialize iteration counter
     iter= 1
     # EM algorithm
-    while (abs_change > ϵ_abs && rel_change > ϵ_rel) && iter < max_iter
+    while rel_change > ϵ && iter < max_iter
         # Store current parameters
         copyto!(state.ψ_prev, state.ψ)
 
@@ -115,10 +113,8 @@ function em!(model::StateSpaceModel, pen::NamedTuple;
         # Store change in state
         state.Δ.= state.ψ .- state.ψ_prev
 
-        # Absolute change
-        abs_change= maximum(abs, state.Δ)
         # Relative change
-        rel_change= abs_change * inv(1 + maximum(abs, state.ψ))
+        rel_change= norm(state.Δ, Inf) * inv(1 + norm(state.ψ, Inf))
 
         # Update iteration counter
         iter+=1
@@ -128,7 +124,7 @@ function em!(model::StateSpaceModel, pen::NamedTuple;
 end
 
 """
-    ecm!(model, pen; init=NamedTuple(), ϵ_abs=1e-7, ϵ_rel=1e-3, max_iter=1000)
+    ecm!(model, pen; init=NamedTuple(), ϵ=1e-4, max_iter=1000)
 
 Expectation-Conditional Maximization (ECM) algorithm to estimate the hyper
 parameters of a linear Gaussian State Space model as defined by `model`, results
@@ -139,8 +135,7 @@ are stored in `model`.
   - `pen::NamedTuple`       : penalization parameters
   - `method::Symbol`        : filtering method
   - `init::NamedTuple`      : initial model parameters
-  - `ϵ_abs::Real`           : absolute tolerance
-  - `ϵ_rel::Real`           : relative tolerance
+  - `ϵ::Real`               : tolerance
   - `max_iter::Integer`     : max number of iterations
 
 #### Returns
@@ -148,7 +143,7 @@ are stored in `model`.
 """
 function ecm!(model::StateSpaceModel, pen::NamedTuple; 
                 method::Symbol=:univariate, init::NamedTuple=NamedTuple(), 
-                ϵ_abs::Real=1e-7, ϵ_rel::Real=1e-3, max_iter::Integer=1000)            
+                ϵ::Real=1e-4, max_iter::Integer=1000)            
     # Initialize state space model and system
     sys= init!(model, init, method)
 
@@ -189,13 +184,12 @@ function ecm!(model::StateSpaceModel, pen::NamedTuple;
                                 similar(model.y, p, p), similar(model.y, p), 
                                 similar(model.y, p, p))
 
-    # Initialize stopping flags
-    abs_change= Inf
+    # Initialize relative change
     rel_change= Inf
     # Initialize iteration counter
     iter= 1
     # EM algorithm
-    while (abs_change > ϵ_abs && rel_change > ϵ_rel) && iter < max_iter
+    while rel_change > ϵ && iter < max_iter
         # Store current parameters
         copyto!(state.ψ_prev, state.ψ)
 
@@ -210,10 +204,8 @@ function ecm!(model::StateSpaceModel, pen::NamedTuple;
         # Store change in state
         state.Δ.= state.ψ .- state.ψ_prev
 
-        # Absolute change
-        abs_change= maximum(abs, state.Δ)
         # Relative change
-        rel_change= abs_change * inv(1 + maximum(abs, state.ψ))
+        rel_change= norm(state.Δ, Inf) * inv(1 + norm(state.ψ, Inf))
 
         # Update iteration counter
         iter+=1
