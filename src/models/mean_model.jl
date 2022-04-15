@@ -204,7 +204,7 @@ function forecast!(μ_h::AbstractMatrix, model::Exogeneous, h::Integer)
         x.= x_h
     end
 
-    return μ_h
+    return nothing
 end
 
 function forecast(model::Exogeneous, h::Integer)
@@ -214,4 +214,6 @@ function forecast(model::Exogeneous, h::Integer)
     # forecasts
     μ_h= similar(model.μ, n, h)
     forecast!(μ_h, model, h)
+
+    return μ_h
 end
