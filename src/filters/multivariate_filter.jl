@@ -20,6 +20,22 @@ struct MultivariateFilter{Ta, TP, Tv, TF, TK, Tm} <: KalmanFilter
     tmp_p::Tm   # buffer
     tmp_n::Tm   # buffer
 end
+# Constructor
+function MultivariateFilter(n::Integer, p::Integer, T_len::Integer, T::Type)
+    # filter output
+    a= Matrix{T}(undef, p, T_len)
+    P= Array{T,3}(undef, p, p, T_len)
+    v= Matrix{T}(undef, n, T_len)
+    F= Array{T,3}(undef, n, n, T_len)
+    K= Array{T,3}(undef, p, n, T_len)
+
+    # buffers
+    tmp_pn= Matrix{T}(undef, p, n)
+    tmp_p= Matrix{T}(undef, p, p)
+    tmp_n= Matrix{T}(undef, n, n)
+
+    return MultivariateFilter(a, P, v, F, K, tmp_pn, tmp_p, tmp_n)
+end
 
 struct WoodburyFilter{Ta, TP, Tv, TFi, TK, Tm} <: KalmanFilter
 	a::Ta	    # filtered state
@@ -30,6 +46,22 @@ struct WoodburyFilter{Ta, TP, Tv, TFi, TK, Tm} <: KalmanFilter
     tmp_np::Tm  # buffer
     tmp_pn::Tm  # buffer
     tmp_p::Tm   # buffer
+end
+# Constructor
+function WoodburyFilter(n::Integer, p::Integer, T_len::Integer, T::Type)
+    # filter output
+    a= Matrix{T}(undef, p, T_len)
+    P= Array{T,3}(undef, p, p, T_len)
+    v= Matrix{T}(undef, n, T_len)
+    Fi= Array{T,3}(undef, n, n, T_len)
+    K= Array{T,3}(undef, p, n, T_len)
+
+    # buffers
+    tmp_np= Matrix{T}(undef, n, p)
+    tmp_pn= Matrix{T}(undef, p, n)
+    tmp_p= Matrix{T}(undef, p, p)
+
+    return WoodburyFilter(a, P, v, Fi, K, tmp_np, tmp_pn, tmp_p)
 end
 
 """
