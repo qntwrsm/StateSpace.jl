@@ -322,6 +322,101 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 end
 
 """
+    update_filter!(filter, y, Z, T, d, c, H, Q, t, tmp_pn, tmp_p, tmp_n)
+
+Update Kalman filter components at time `t`, storing the results in `filter`.
+
+#### Arguments
+  - `y::AbstractVector`     : data
+  - `Z::AbstractMatrix`     : system matrix ``Z``
+  - `T::AbstractMatrix`     : system matrix ``T``
+  - `d::AbstractVector`     : mean adjustment observation
+  - `c::AbstractVector`     : mean adjustment state
+  - `H::AbstractMatrix`     : system matrix ``H``
+  - `Q::AbstractMatrix`     : system matrix ``Q``
+  - `t::Integer`            : time
+  - `tmp_pn::AbstractMatrix`: buffer (p x n)
+  - `tmp_p::AbstractMatrix` : buffer (p x p)
+  - `tmp_n::AbstractMatrix` : buffer (n x n)
+
+#### Returns
+  - `filter::KalmanFilter`  : Kalman filter components
+"""
+function update_filter!(filter::MultivariateFilter, y::AbstractVector, Z::AbstractMatrix,
+                T::AbstractMatrix, d::AbstractVector, c::AbstractVector, 
+                H::AbstractMatrix, Q::AbstractMatrix, t::Integer, 
+                tmp_pn::AbstractMatrix, tmp_p::AbstractMatrix, tmp_n::AbstractMatrix)
+    # Store views 
+    a= view(filter.a,:,t)
+    P= view(filter.P,:,:,t)
+    v= view(filter.v,:,t)
+    F= view(filter.F,:,:,t)
+    K= view(filter.K,:,:,t)
+    
+    # Forecast error
+    error!(v, y, Z, a, d)
+    
+    # Forecast error variance
+    error_var!(F, P, Z, H, tmp_pn)
+    
+    # Cholesky factorization of Fₜ
+    copyto!(tmp_n, F)
+    fac= cholesky!(Hermitian(tmp_n))
+    
+    # Kalman gain
+    gain!(K, P, fac, Z, T, tmp_pn)
+    
+    if t < T_len
+        # Store views
+        a_p= view(filter.a,:,t+1)
+        P_p= view(filter.P,:,:,t+1)
+        
+        # Predict states
+        predict_state!(a_p, a, K, v, T, c)
+        
+        # Predict states variance
+        predict_state_var!(P_p, P, K, Z, T, Q, tmp_p)
+    end
+
+    return nothing
+end
+
+function update_filter!(filter::WoodburyFilter, y::AbstractVector, Z::AbstractMatrix,
+                T::AbstractMatrix, d::AbstractVector, c::AbstractVector, 
+                Hi::AbstractMatrix, Q::AbstractMatrix, t::Integer, 
+                tmp_np::AbstractMatrix, tmp_pn::AbstractMatrix, tmp_p::AbstractMatrix)
+    # Store views 
+    a= view(filter.a,:,t)
+    P= view(filter.P,:,:,t)
+    v= view(filter.v,:,t)
+    Fi= view(filter.Fi,:,:,t)
+    K= view(filter.K,:,:,t)
+    
+    # Forecast error
+    error!(v, y, Z, a, d)
+    
+    # Forecast error precision
+    error_prec!(Fi, P, Z, Hi, tmp_np, tmp_pn, tmp_p)
+    
+    # Kalman gain
+    gain!(K, P, Fi, Z, T, tmp_pn)
+    
+    if t < T_len
+        # Store views
+        a_p= view(filter.a,:,t+1)
+        P_p= view(filter.P,:,:,t+1)
+        
+        # Predict states
+        predict_state!(a_p, a, K, v, T, c)
+        
+        # Predict states variance
+        predict_state_var!(P_p, P, K, Z, T, Q, tmp_p)
+    end
+
+    return nothing
+end
+
+"""
 	kalman_filter!(filter, sys) 
 	
 Compute predicted states ``a`` and forecast errors ``v`` with corresponding
