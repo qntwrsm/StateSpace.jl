@@ -10,20 +10,26 @@ multivariate_filter.jl
 =#
 
 # Structs
-struct MultivariateFilter{Ta, TP, Tv, TF, TK} <: KalmanFilter
-	a::Ta	# filtered state
-	P::TP	# filtered state variance
-	v::Tv  	# forecast error
-	F::TF	# forecast error variance
-	K::TK	# Kalman gain
+struct MultivariateFilter{Ta, TP, Tv, TF, TK, Tm} <: KalmanFilter
+	a::Ta	    # filtered state
+	P::TP	    # filtered state variance
+	v::Tv  	    # forecast error
+	F::TF	    # forecast error variance
+	K::TK	    # Kalman gain
+    tmp_pn::Tm  # buffer
+    tmp_p::Tm   # buffer
+    tmp_n::Tm   # buffer
 end
 
-struct WoodburyFilter{Ta, TP, Tv, TFi, TK} <: KalmanFilter
-	a::Ta	# filtered state
-	P::TP	# filtered state variance
-	v::Tv	# forecast error
-	Fi::TFi	# inverse forecast error variance
-	K::TK	# Kalman gain
+struct WoodburyFilter{Ta, TP, Tv, TFi, TK, Tm} <: KalmanFilter
+	a::Ta	    # filtered state
+	P::TP	    # filtered state variance
+	v::Tv	    # forecast error
+	Fi::TFi	    # inverse forecast error variance
+	K::TK	    # Kalman gain
+    tmp_np::Tm  # buffer
+    tmp_pn::Tm  # buffer
+    tmp_p::Tm   # buffer
 end
 
 """
@@ -322,7 +328,7 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 end
 
 """
-    update_filter!(filter, y, Z, T, d, c, H, Q, t, tmp_pn, tmp_p, tmp_n)
+    update_filter!(filter, y, Z, T, d, c, H, Q, t)
 
 Update Kalman filter components at time `t`, storing the results in `filter`.
 
@@ -335,17 +341,13 @@ Update Kalman filter components at time `t`, storing the results in `filter`.
   - `H::AbstractMatrix`     : system matrix ``H``
   - `Q::AbstractMatrix`     : system matrix ``Q``
   - `t::Integer`            : time
-  - `tmp_pn::AbstractMatrix`: buffer (p x n)
-  - `tmp_p::AbstractMatrix` : buffer (p x p)
-  - `tmp_n::AbstractMatrix` : buffer (n x n)
 
 #### Returns
   - `filter::KalmanFilter`  : Kalman filter components
 """
 function update_filter!(filter::MultivariateFilter, y::AbstractVector, Z::AbstractMatrix,
                 T::AbstractMatrix, d::AbstractVector, c::AbstractVector, 
-                H::AbstractMatrix, Q::AbstractMatrix, t::Integer, 
-                tmp_pn::AbstractMatrix, tmp_p::AbstractMatrix, tmp_n::AbstractMatrix)
+                H::AbstractMatrix, Q::AbstractMatrix, t::Integer)
     # Store views 
     a= view(filter.a,:,t)
     P= view(filter.P,:,:,t)
@@ -357,14 +359,14 @@ function update_filter!(filter::MultivariateFilter, y::AbstractVector, Z::Abstra
     error!(v, y, Z, a, d)
     
     # Forecast error variance
-    error_var!(F, P, Z, H, tmp_pn)
+    error_var!(F, P, Z, H, filter.tmp_pn)
     
     # Cholesky factorization of Fₜ
-    copyto!(tmp_n, F)
-    fac= cholesky!(Hermitian(tmp_n))
+    copyto!(filter.tmp_n, F)
+    fac= cholesky!(Hermitian(filter.tmp_n))
     
     # Kalman gain
-    gain!(K, P, fac, Z, T, tmp_pn)
+    gain!(K, P, fac, Z, T, filter.tmp_pn)
     
     if t < T_len
         # Store views
@@ -375,7 +377,7 @@ function update_filter!(filter::MultivariateFilter, y::AbstractVector, Z::Abstra
         predict_state!(a_p, a, K, v, T, c)
         
         # Predict states variance
-        predict_state_var!(P_p, P, K, Z, T, Q, tmp_p)
+        predict_state_var!(P_p, P, K, Z, T, Q, filter.tmp_p)
     end
 
     return nothing
@@ -383,8 +385,7 @@ end
 
 function update_filter!(filter::WoodburyFilter, y::AbstractVector, Z::AbstractMatrix,
                 T::AbstractMatrix, d::AbstractVector, c::AbstractVector, 
-                Hi::AbstractMatrix, Q::AbstractMatrix, t::Integer, 
-                tmp_np::AbstractMatrix, tmp_pn::AbstractMatrix, tmp_p::AbstractMatrix)
+                Hi::AbstractMatrix, Q::AbstractMatrix, t::Integer)
     # Store views 
     a= view(filter.a,:,t)
     P= view(filter.P,:,:,t)
@@ -396,10 +397,10 @@ function update_filter!(filter::WoodburyFilter, y::AbstractVector, Z::AbstractMa
     error!(v, y, Z, a, d)
     
     # Forecast error precision
-    error_prec!(Fi, P, Z, Hi, tmp_np, tmp_pn, tmp_p)
+    error_prec!(Fi, P, Z, Hi, filter.tmp_np, filter.tmp_pn, filter.tmp_p)
     
     # Kalman gain
-    gain!(K, P, Fi, Z, T, tmp_pn)
+    gain!(K, P, Fi, Z, T, filter.tmp_pn)
     
     if t < T_len
         # Store views
@@ -410,7 +411,7 @@ function update_filter!(filter::WoodburyFilter, y::AbstractVector, Z::AbstractMa
         predict_state!(a_p, a, K, v, T, c)
         
         # Predict states variance
-        predict_state_var!(P_p, P, K, Z, T, Q, tmp_p)
+        predict_state_var!(P_p, P, K, Z, T, Q, filter.tmp_p)
     end
 
     return nothing
