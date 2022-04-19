@@ -441,8 +441,9 @@ Update Kalman filter components at time `t`, storing the results in `filter`.
 """
 function update_filter!(filter::MultivariateFilter, 
                         y::AbstractVector, 
-                        Z::AbstractMatrix, T::AbstractMatrix, d::AbstractVector, 
-                        c::AbstractVector, H::AbstractMatrix, Q::AbstractMatrix, 
+                        Z::AbstractMatrix, T::AbstractMatrix, 
+                        d::AbstractVector, c::AbstractVector, 
+                        H::AbstractMatrix, Q::AbstractMatrix, 
                         t::Integer)
     # Store views 
     a= view(filter.a,:,t)
@@ -481,8 +482,9 @@ end
 
 function update_filter!(filter::WoodburyFilter, 
                         y::AbstractVector, 
-                        Z::AbstractMatrix, T::AbstractMatrix, d::AbstractVector, 
-                        c::AbstractVector, Hi::AbstractMatrix, Q::AbstractMatrix, 
+                        Z::AbstractMatrix, T::AbstractMatrix, 
+                        d::AbstractVector, c::AbstractVector, 
+                        Hi::AbstractMatrix, Q::AbstractMatrix, 
                         t::Integer)
     # Store views 
     a= view(filter.a,:,t)
@@ -533,7 +535,8 @@ i.e. NaN, storing the results in `filter`.
   - `filter::KalmanFilter`  : Kalman filter components
 """
 function update_filter!(filter::MultivariateFilter, 
-                        T::AbstractMatrix, c::AbstractVector, 
+                        Z::AbstractMatrix, T::AbstractMatrix, 
+                        c::AbstractVector, 
                         H::AbstractMatrix, Q::AbstractMatrix, 
                         t::Integer)
     # Store views 
@@ -547,7 +550,7 @@ function update_filter!(filter::MultivariateFilter,
     v.= NaN
     
     # Forecast error variance
-    F.= H
+    error_var!(F, P, Z, H, filter.tmp_pn)
     
     # Kalman gain
     K.= zero(eltype(K))
@@ -569,7 +572,8 @@ function update_filter!(filter::MultivariateFilter,
 end
 
 function update_filter!(filter::WoodburyFilter,
-                        T::AbstractMatrix, c::AbstractVector, 
+                        Z::AbstractMatrix, T::AbstractMatrix, 
+                        c::AbstractVector, 
                         Hi::AbstractMatrix, Q::AbstractMatrix, 
                         t::Integer)
     # Store views 
@@ -582,8 +586,8 @@ function update_filter!(filter::WoodburyFilter,
     # Forecast error
     v.= NaN
     
-    # Forecast error variance
-    Fi.= Hi
+    # Forecast error precision
+    error_prec!(Fi, P, Z, Hi, filter.tmp_np, filter.tmp_pn, filter.tmp_p)
     
     # Kalman gain
     K.= zero(eltype(K))
@@ -633,7 +637,7 @@ function kalman_filter!(filter::MultivariateFilter, sys::LinearTimeInvariant)
 
         # update filter
         if any(isnan, y_t)
-            update_filter!(filter, sys.T, sys.c, sys.H, sys.Q, t)
+            update_filter!(filter, sys.Z, sys.T, sys.c, sys.H, sys.Q, t)
         else
             update_filter!(filter, y_t, sys.Z, sys.T, sys.d, sys.c, sys.H, sys.Q, t)
         end
@@ -661,7 +665,7 @@ function kalman_filter!(filter::MultivariateFilter, sys::LinearTimeVariant)
 
         # update filter
         if any(isnan, y_t)
-            update_filter!(filter, sys.T[t], c_t, sys.H[t], sys.Q[t], t)
+            update_filter!(filter, sys.Z[t], sys.T[t], c_t, sys.H[t], sys.Q[t], t)
         else
             update_filter!(filter, y_t, sys.Z[t], sys.T[t], d_t, c_t, sys.H[t], sys.Q[t], t)
         end
@@ -710,7 +714,7 @@ function kalman_filter!(filter::WoodburyFilter, sys::LinearTimeInvariant)
 
         # update filter
         if any(isnan, y_t)
-            update_filter!(filter, sys.T, sys.c, Hi, sys.Q, t)
+            update_filter!(filter, sys.Z, sys.T, sys.c, Hi, sys.Q, t)
         else
             update_filter!(filter, y_t, sys.Z, sys.T, sys.d, sys.c, Hi, sys.Q, t)
         end
@@ -749,7 +753,7 @@ function kalman_filter!(filter::WoodburyFilter, sys::LinearTimeVariant)
 
         # update filter
         if any(isnan, y_t)
-            update_filter!(filter, sys.T[t], c_t, Hi, sys.Q[t], t)
+            update_filter!(filter, sys.Z[t], sys.T[t], c_t, Hi, sys.Q[t], t)
         else
             update_filter!(filter, y_t, sys.Z[t], sys.T[t], d_t, c_t, Hi, sys.Q[t], t)
         end
