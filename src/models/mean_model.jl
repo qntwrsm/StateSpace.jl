@@ -181,9 +181,24 @@ function update_mean!(model::Exogeneous, init_resid!::Function, error::AbstractE
 end
 
 # Forecast
-function forecast!(μ_h::AbstractMatrix, model::Exogeneous, h::Integer)
-    # get dims
-    T= size(model.μ,2)
+reinstantiate(model::AbstractMeanModel, h::Integer)= model
+function reinstantiate(model::Exogeneous, h::Integer)
+    # number of time series
+    n= size(mean(model),1)
+    # number of exogeneous variables
+    k= size(model.X,1)
+
+    # expand
+    μ= hcat(mean(model), fill(NaN, n, h))
+    X= hcat(model.X, fill(NaN, k, h))
+
+    return Exogeneous(μ, model.β, X, model.C)
+end
+
+forecast!(model::AbstractMeanModel, h::Integer)= model
+function forecast!(model::Exogeneous, h::Integer)
+    # number of obs
+    T= size(mean(model),2) - h
 
     # create lag and lead
     X= view(model.X, :, 1:T-1) 
@@ -196,24 +211,24 @@ function forecast!(μ_h::AbstractMatrix, model::Exogeneous, h::Integer)
     rdiv!(ϕ, C)
 
     # forecasts
-    x= copy(view(model.X, :, T))
-    x_h= similar(x)
     for i in 1:h
+        x= view(model.X,:,T+i-1)
+        x_h= view(model.X,:,T+i)
+        μ_h= view(model.μ,:,T+i)
+
         mul!(x_h, ϕ, x)
-        mul!(view(μ_h, :, i), model.β, x_h)
-        x.= x_h
+        mul!(μ_h, model.β, x_h)
     end
 
     return nothing
 end
 
-function forecast(model::Exogeneous, h::Integer)
-    # number of time series
-    n= size(model.μ,1)
+function forecast(model::AbstractMeanModel, h::Integer)
+    # reinstantiate
+    f= reinstantiate(model, h)
 
     # forecasts
-    μ_h= similar(model.μ, n, h)
-    forecast!(μ_h, model, h)
+    forecast!(f, h)
 
-    return μ_h
+    return f
 end
