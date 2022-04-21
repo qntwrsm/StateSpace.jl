@@ -17,6 +17,8 @@ end
 # Constructor
 function Forecast(n::Integer, p::Integer, h::Integer, T::Type)
     # forecast components
+    y_hat= Matrix{T}(undef, n, h)
+    F_hat= Array{T,3}(undef, n, n, h)
     a_hat= Matrix{T}(undef, p, h)
     P_hat= Array{T,3}(undef, p, p, h)
 
