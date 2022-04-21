@@ -28,7 +28,8 @@ end
 """
 	forecast(sys, h)
 	
-Compute ``h``-step ahead state forecasts and forecast error variances for a
+Compute ``h``-step ahead forecasts for observations and states with
+corresponding forecast error variances and forecasted state variances for a
 state space model with system matrices `sys`.
 
 #### Arguments
