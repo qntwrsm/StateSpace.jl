@@ -7,142 +7,91 @@ forecast.jl
 
 @date: 2021/12/06
 =#
+# Struct
+struct Forecast{Ty, TF, Ta, TP}
+    y_hat::Ty   # forecasts
+    F_hat::TF   # forecast error variance
+    a_hat::Ta   # forecasted states
+    P_hat::TP   # forecasted state variances
+end
+# Constructor
+function Forecast(n::Integer, p::Integer, h::Integer, T::Type)
+    # forecast components
+    a_hat= Matrix{T}(undef, p, h)
+    P_hat= Array{T,3}(undef, p, p, h)
+
+    return Forecast(y_hat, F_hat, a_hat, P_hat)
+end
 
 """
-	quad_update!(C, X, A, B, tmp)
+	forecast(sys, h)
 	
-Compute the quadratic time transition for forecast objects for time ``T+h`` for
-a linear Gaussian State Space model, with transition matrix `A` and constant
-`B`. Storing the results in `C`.
+Compute ``h``-step ahead state forecasts and forecast error variances for a
+state space model with system matrices `sys`.
 
 #### Arguments
-  - `X::AbstractMatrix`		: input (k x k)
-  - `A::AbstractMatrix`		: transition matrix (n x k)
-  - `B::AbstractMatrix`		: constant matrix (n x n)
-  - `tmp::AbstractMatrix`	: tmp storage array (n x k)
-
-#### Returns
-  - `C::AbstractMatrix`		: forecast object (n x n)
-"""
-function quad_update!(C::AbstractMatrix, X::AbstractMatrix, A::AbstractMatrix, B::AbstractMatrix, tmp::AbstractMatrix)
-	# AｘX
-	mul!(tmp, A, X)
-	# AｘXｘA'
-	mul!(C, tmp, transpose(A))
-	# C = AｘXｘA' + B
-	@. C+= B
-end
-
-function quad_update!(C::AbstractMatrix, X::AbstractMatrix, A::Diagonal, B::AbstractMatrix, tmp::AbstractMatrix)
-	# C = AｘXｘA' + B
-	@. C= A.diag*X*transpose(A.diag) + B
-end
-
-function quad_update!(C::AbstractMatrix, X::AbstractMatrix, A::AbstractMatrix, B::Diagonal, tmp::AbstractMatrix)
-	# AｘX
-	mul!(tmp, A, X)
-	# AｘXｘA'
-	mul!(C, tmp, transpose(A))
-	# C = AｘXｘA' + B
-	@inbounds @fastmath for i in axes(B,1)
-		C[i,i]+= B.diag[i]
-	end
-end
-
-"""
-	forecast(filter, sys, h)
-	
-Compute ``h``-step ahead state forecasts and corresponding variances for the
-latent states as well as forecast error variances for a State Space model using
-the Kalman filter output `filter`.
-
-#### Arguments
-  - `filter::KalmanFilter`	: Kalman filter output
   - `sys::StateSpaceSystem`	: state space system matrices
   - `h::Integer`			: forecast horizon
 
 #### Returns
-  - `a_h::AbstractMatrix`	: h-step ahead forecasts of states (p x h)
-  - `P_h::AbstractArray`	: h-step ahead forecast variances (p x p x h)
-  - `F_h::AbstractArray`	: h-step ahead forecast error variances (n x n x h)
+  - `f::Forecast`   : forecasts and forecast error variances
 """
-function forecast(filter::KalmanFilter, sys::StateSpaceSystem, h::Integer)
-	# Get dimensions
-	(n,p)= size(sys.Z)
-	T_len= size(filter.a,2)
+function forecast(sys::LinearTimeInvariant, h::Integer)
+	# get dims
+	(n,T_len)= size(sys.y)
+    p= length(sys.a1)
+
+    # Type
+    T= eltype(sys.y)
+
+    # Kalman filter
+    filter= MultivariateFilter(n, p, T_len, T)
+    kalman_filter!(filter, sys)
+
+    # forecasts
+    f= Forecasts(n, h, h, T)
+    @inbounds @fastmath for i in 1:h
+        # Store filter forecast output
+        f.F_hat[:,:,i]= view(filter.F,:,:,T_len-h+i)
+        f.a_hat[:,i]= view(filter.a,:,T_len-h+i)
+        f.P_hat[:,:,i]= view(filter.P,:,:,T_len-h+i)
+
+        # forecast
+        y_hat= view(f.y_hat, :, i)
+        a_hat= view(f.a_hat, :, i)
+        y_hat.= sys.d
+        mul!(y_hat, sys.Z, a_hat, 1., 1.)
+    end
 	
-	#Initialize tmp. cont.
-	tmp_np= Matrix{Float64}(undef, (n,p))
-	tmp_p= Matrix{Float64}(undef, (p,p))
-	
-	# Intialize return cont.
-	a_h= Matrix{Float64}(undef, (p,h))
-	P_h= Array{Float64,3}(undef, (p,p,h))
-	F_h= Array{Float64,3}(undef, (n,n,h))
-	
-	# Loop over horizon
-	@inbounds @fastmath for j in 1:h
-		# Store views
-		a_f= view(a_h,:,j)
-		P_f= view(P_h[:,:,j])
-		if j != 1
-			a_c= view(a_h,:,j-1)
-			P_c= view(P_h[:,:,j-1])
-		else
-			a_c= view(filter.a,:,T_len)
-			P_c= view(filter.P,:,:,T_len)
-		end
-		F_f= view(F_h,:,:,j)
-		
-		# Forecast
-		mul!(a_f, sys.T, a_c)
-		# Forecast variance
-		quad_update!(P_f, P_c, sys.T, sys.Q, tmp_p)
-		# Forecast error variance
-		quad_update!(F_f, P_f, sys.Z, sys.H, tmp_np)
-	end
-	
-	return (a_h, P_h, F_h)
+	return f
 end
 
-"""
-	forecast!(a_h, P_h, F_h, filter, sys, h)
+function forecast(sys::LinearTimeVariant, h::Integer)
+	# get dims
+	(n,T_len)= size(sys.y)
+    p= length(sys.a1)
+
+    # Type
+    T= eltype(sys.y)
+
+    # Kalman filter
+    filter= MultivariateFilter(n, p, T_len, T)
+    kalman_filter!(filter, sys)
+
+    # forecasts
+    f= Forecasts(n, h, h, T)
+    @inbounds @fastmath for i in 1:h
+        # Store filter forecast output
+        f.F_hat[:,:,i]= view(filter.F,:,:,T_len-h+i)
+        f.a_hat[:,i]= view(filter.a,:,T_len-h+i)
+        f.P_hat[:,:,i]= view(filter.P,:,:,T_len-h+i)
+
+        # forecast
+        y_hat= view(f.y_hat, :, i)
+        a_hat= view(f.a_hat, :, i)
+        y_hat.= view(sys.d, :, T_len-h+i)
+        mul!(y_hat, sys.Z[T_len-h+i], a_hat, 1., 1.)
+    end
 	
-Compute ``h``-step ahead state forecasts and corresponding variances for the
-latent states as well as forecast error variances for a State Space model and
-storing them in `a_h`, `P_h`, and `F_h`. See also `forecast`.
-"""
-function forecast!(a_h::AbstractMatrix, P_h::AbstractArray, F_h::AbstractArray, 
-					filter::KalmanFilter, sys::StateSpaceSystem, h::Integer)
-	# Get dimensions
-	(n,p)= size(sys.Z)
-	T_len= size(filter.a,2)
-
-	#Initialize tmp. cont.
-	tmp_np= Matrix{Float64}(undef, (n,p))
-	tmp_p= Matrix{Float64}(undef, (p,p))
-
-	# Loop over horizon
-	@inbounds @fastmath for j in 1:h
-		# Store views
-		a_f= view(a_h,:,j)
-		P_f= view(P_h[:,:,j])
-		if j != 1
-			a_c= view(a_h,:,j-1)
-			P_c= view(P_h[:,:,j-1])
-		else
-			a_c= view(filter.a,:,T_len)
-			P_c= view(filter.P,:,:,T_len)
-		end
-		F_f= view(F_h,:,:,j)
-
-		# Forecast
-		mul!(a_f, sys.T, a_c)
-		# Forecast variance
-		quad_update!(P_f, P_c, sys.T, sys.Q, tmp_p)
-		# Forecast error variance
-		quad_update!(F_f, P_f, sys.Z, sys.H, tmp_np)
-	end
-
-	return nothing
+	return f
 end
