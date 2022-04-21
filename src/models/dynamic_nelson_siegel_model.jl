@@ -336,37 +336,24 @@ function loglik(filter::KalmanFilter, sys::StateSpaceSystem, model::DynamicNelso
 end
 
 # Forecast
-function forecast!(y_h::AbstractMatrix, model::DynamicNelsonSiegelModel, h::Integer)
-    # Get dims
-    T= size(model.y,2)
-
-    # State space system
-    sys= create_system(model, :collapsed)
-    fix_system!(sys, model, :collapsed)
-    init_system!(sys, model)
-    get_system!(sys, model, :collapsed)
-
-    # filter
-    filter= UnivariateFilter(similar(model.y, 3, 4, T), similar(model.y, 3, 3, 4, T), 
-                                similar(model.y, 3, T), similar(model.y, 3, T),
-                                similar(model.y, 3, 3, T))
-    # run filter
-    kalman_filter!(filter, sys)
-
-    # forecasts
-    (a_h, _, _)= forecast(filter, sys, h)   # factors
-    mul!(y_h, loadings(model), a_h)
-
-    return nothing
-end
-
 function forecast(model::DynamicNelsonSiegelModel, h::Integer)
     # number of time series
     n= size(model.y,1)
 
-    # forecasts
-    y_h= similar(model.y, n, h)
-    forecast!(y_h, model, h)
+    # create forecast variables
+    y_f= hcat(model.y, fill(NaN, n, h))
 
-    return y_h
+    # reinstantiate
+    forecast_model= DynamicNelsonSiegelModel(y_f, model.τ, model.λ, model.ϕ, model.error_obs, model.error_factor)
+    
+    # State space system
+    sys= create_system(forecast_model, :multivariate)
+    fix_system!(sys, forecast_model, :multivariate)
+    init_system!(sys, forecast_model)
+    get_system!(sys, forecast_model, :multivariate)
+
+    # forecasts
+    f= forecast(sys, h)
+
+    return f
 end
