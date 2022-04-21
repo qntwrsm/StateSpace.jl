@@ -41,6 +41,8 @@ cov(model::DynamicFactorModel)= cov(model.error)
 prec(model::DynamicFactorModel)= prec(model.error)
 resid(model::DynamicFactorModel)= resid(model.error)
 
+function (y::Abstract)
+
 # State space system and hyperparameters
 function nparams(model::DynamicFactorModel)
     # Get dims
@@ -524,39 +526,25 @@ function update_model!(model::DynamicFactorModel, state::EMOptimizerState,
 end
 
 # Forecast
-function forecast!(y_h::AbstractMatrix, model::DynamicFactorModel, h::Integer)
-    # Get dims
-    T= size(model.y,2)
-    p= model.r
-
-    # State space system
-    sys= create_system(model, :collapsed)
-    fix_system!(sys, model, :collapsed)
-    init_system!(sys, model)
-    get_system!(sys, model, :collapsed)
-
-    # filter
-    filter= UnivariateFilter(similar(model.y, p, p+1, T), similar(model.y, p, p, p+1, T), 
-                                similar(model.y, p, T), similar(model.y, p, T),
-                                similar(model.y, p, p, T))
-    # run filter
-    kalman_filter!(filter, sys)
-
-    # forecasts
-    (a_h, _, _)= forecast(filter, sys, h)   # factors
-    forecast!(y_h, model.mean, h)    # mean
-    mul!(y_h, model.Λ, a_h, 1., 1.)
-
-    return nothing
-end
-
 function forecast(model::DynamicFactorModel, h::Integer)
     # number of time series
     n= size(model.y,1)
 
-    # forecasts
-    y_h= similar(model.y, n, h)
-    forecast!(y_h, model, h)
+    # create forecast variables
+    y_f= hcat(model.y, fill(NaN, n, h))
 
-    return y_h
+    # reinstantiate
+    forecast_mean= forecast(model.mean, h)
+    forecast_model= DynamicFactorModel(y_f, model.r, forecast_mean, model.Λ, model.ϕ, model.error)
+    
+    # State space system
+    sys= create_system(forecast_model, :multivariate)
+    fix_system!(sys, forecast_model, :multivariate)
+    init_system!(sys, forecast_model)
+    get_system!(sys, forecast_model, :multivariate)
+
+    # forecasts
+    f= forecast(sys, h)
+
+    return f
 end
