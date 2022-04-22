@@ -57,7 +57,7 @@ function em!(model::StateSpaceModel, pen::NamedTuple;
     sys= init!(model, init, method)
 
     # Get dims
-    (n,T)= size(model.y)
+    (n,T_len)= size(model.y)
     p= length(sys.a1)
     n_params= nparams(model)
 
@@ -74,18 +74,15 @@ function em!(model::StateSpaceModel, pen::NamedTuple;
                     similar(ψ, p, p), similar(ψ, p, p))
 
     # Initialize filter and smoother
-    if method === :univariate || method === :collapsed
-        filter= UnivariateFilter(similar(model.y, p, n+1, T), similar(model.y, p, p, n+1, T), 
-                                similar(model.y, n, T), similar(model.y, n, T),
-                                similar(model.y, p, n, T))
+    T= eltype(model.y)  # type
+    if method === :univariate 
+        filter= UnivariateFilter(n, p, T_len, T)
+    elseif method === :collapsed
+        filter= UnivariateFilter(p, p, T_len, T)
     elseif method === :multivariate
-        filter= MultivariateFilter(similar(model.y, p, T), similar(model.y, p, p, T), 
-                                similar(model.y, n, T), similar(model.y, n, n, T),
-                                similar(model.y, p, n, T))
+        filter= MultivariateFilter(n, p, T_len, T)
     elseif method === :woodbury
-        filter= WoodburyFilter(similar(model.y, p, T), similar(model.y, p, p, T), 
-                                similar(model.y, n, T), similar(model.y, n, n, T),
-                                similar(model.y, p, n, T))
+        filter= WoodburyFilter(n, p, T_len, T)
     else
         throw(ArgumentError("Invalid method name $(method)"))
     end
@@ -148,7 +145,7 @@ function ecm!(model::StateSpaceModel, pen::NamedTuple;
     sys= init!(model, init, method)
 
     # Get dims
-    (n,T)= size(model.y)
+    (n,T_len)= size(model.y)
     p= length(sys.a1)
     n_params= nparams(model)
 
@@ -161,22 +158,15 @@ function ecm!(model::StateSpaceModel, pen::NamedTuple;
                     similar(ψ, p, p), similar(ψ, p, p))
 
     # Initialize filter and smoother
+    T= eltype(model.y)  # type
     if method === :univariate 
-        filter= UnivariateFilter(similar(model.y, p, n+1, T), similar(model.y, p, p, n+1, T), 
-                                similar(model.y, n, T), similar(model.y, n, T),
-                                similar(model.y, p, n, T))
+        filter= UnivariateFilter(n, p, T_len, T)
     elseif method === :collapsed
-        filter= UnivariateFilter(similar(model.y, p, p+1, T), similar(model.y, p, p, p+1, T), 
-                                similar(model.y, p, T), similar(model.y, p, T),
-                                similar(model.y, p, p, T))
+        filter= UnivariateFilter(p, p, T_len, T)
     elseif method === :multivariate
-        filter= MultivariateFilter(similar(model.y, p, T), similar(model.y, p, p, T), 
-                                similar(model.y, n, T), similar(model.y, n, n, T),
-                                similar(model.y, p, n, T))
+        filter= MultivariateFilter(n, p, T_len, T)
     elseif method === :woodbury
-        filter= WoodburyFilter(similar(model.y, p, T), similar(model.y, p, p, T), 
-                                similar(model.y, n, T), similar(model.y, n, n, T),
-                                similar(model.y, p, n, T))
+        filter= WoodburyFilter(n, p, T_len, T)
     else
         throw(ArgumentError("Invalid method name $(method)"))
     end
