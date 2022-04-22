@@ -41,8 +41,6 @@ cov(model::DynamicFactorModel)= cov(model.error)
 prec(model::DynamicFactorModel)= prec(model.error)
 resid(model::DynamicFactorModel)= resid(model.error)
 
-function (y::Abstract)
-
 # State space system and hyperparameters
 function nparams(model::DynamicFactorModel)
     # Get dims
