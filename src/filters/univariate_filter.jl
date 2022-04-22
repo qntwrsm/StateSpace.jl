@@ -261,7 +261,7 @@ function kalman_filter!(filter::UnivariateFilter, sys::LinearTimeInvariant)
 			P_p= view(filter.P,:,:,1,t+1)
 			
 			# Predict states and variances
-			predict!(a_p, P_p, a_f, P_f, sys.T, sys.Q, sys.c, tmp_p)
+			predict!(a_p, P_p, a_f, P_f, sys.T, sys.Q, sys.c, filter.tmp)
 		end
 	end
 	
@@ -303,7 +303,7 @@ function kalman_filter!(filter::UnivariateFilter, sys::LinearTimeVariant)
             c_t= view(sys.c,:,t)
 			
 			# Predict states and variances
-			predict!(a_p, P_p, a_f, P_f, sys.T[t], sys.Q[t], c_t, tmp_p)
+			predict!(a_p, P_p, a_f, P_f, sys.T[t], sys.Q[t], c_t, filter.tmp)
 		end
 	end
 	
