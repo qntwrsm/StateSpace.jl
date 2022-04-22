@@ -380,25 +380,12 @@ function loglik(filter::KalmanFilter, sys::StateSpaceSystem, model::DynamicFacto
         # Add Jacobian determinant term
         ll-= .5 * T_len * logdet(C)
 
-        # Z'×H⁻¹×Z
-        tmp_np= prec(model) * model.Λ
-        tmp= transpose(model.Λ) * tmp_np
-        # (Z'×H⁻¹×Z)⁻¹ 
-        # perform pseudo inverse as Λ can contain zero columns
-        pseudo= pinv(tmp)
-        # pivoted Cholesky decomposition
-        C= cholesky!(Hermitian(pseudo), Val(true), check=false)
-        # transformation
-        ip= invperm(C.p)
-        U= C.U[:,ip]
-        A= model.Λ * transpose(U)
-
         # Add projected out term
         ll-= .5 * (n - model.r) * T_len * log(2*π)
         e= similar(model.y, n)
         @inbounds @fastmath for t in 1:T_len
             e.= view(model.y,:,t)
-            mul!(e, A, view(sys.y,:,t), -1., 1.)
+            mul!(e, model.Λ, view(sys.y,:,t), -1., 1.)
             ll-= .5 * dot(e, prec(model), e)
         end
     end
