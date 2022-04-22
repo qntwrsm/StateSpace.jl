@@ -86,9 +86,7 @@ function em!(model::StateSpaceModel, pen::NamedTuple;
     else
         throw(ArgumentError("Invalid method name $(method)"))
     end
-    smoother= Smoother(similar(model.y, p, T), similar(model.y, p, p, 2, T), 
-                                similar(model.y, p, p), similar(model.y, p), 
-                                similar(model.y, p, p))
+    smoother= Smoother(p, 1, T_len, T)
 
     # Initialize relative change
     rel_change= Inf
@@ -170,9 +168,7 @@ function ecm!(model::StateSpaceModel, pen::NamedTuple;
     else
         throw(ArgumentError("Invalid method name $(method)"))
     end
-    smoother= Smoother(similar(model.y, p, T), similar(model.y, p, p, 2, T), 
-                                similar(model.y, p, p), similar(model.y, p), 
-                                similar(model.y, p, p))
+    smoother= Smoother(p, 1, T_len, T)
 
     # Initialize relative change
     rel_change= Inf

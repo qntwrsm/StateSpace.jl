@@ -16,6 +16,17 @@ struct Smoother{Tα, TV, TL, Tr, TN} <: KalmanSmoother
 	r::Tr	# backward smoothing recursion (state)
 	N::TN	# backward smoothing recursion (variance)
 end
+# Constructor
+function Smoother(p::Integer, h::Integer, T_len::Integer, T::Type)
+    # filter output
+    α= Matrix{T}(undef, p, T_len)
+    V= Array{T,4}(undef, p, p, h+1, T_len)
+    L= Matrix{T}(undef, p, p)
+    r= Vector{T}(undef, p)
+    N= Matrix{T}(undef, p, p)
+
+    return Smoother(α, V, L, r, N)
+end
 
 """
 	computeL!(L_t, K_t, Z, T)
