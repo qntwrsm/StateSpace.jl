@@ -422,7 +422,7 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, T::Diagona
 end
 
 """
-    update_filter!(filter, y, Z, T, d, c, H, Q, t)
+    update_filter!(filter, y, Z, T, d, c, H, Q, t, T_len)
 
 Update Kalman filter components at time `t`, storing the results in `filter`.
 
@@ -435,6 +435,7 @@ Update Kalman filter components at time `t`, storing the results in `filter`.
   - `H::AbstractMatrix`     : system matrix ``H``
   - `Q::AbstractMatrix`     : system matrix ``Q``
   - `t::Integer`            : time
+  - `T_len::Integer`        : number of obs
 
 #### Returns
   - `filter::KalmanFilter`  : Kalman filter components
@@ -444,7 +445,7 @@ function update_filter!(filter::MultivariateFilter,
                         Z::AbstractMatrix, T::AbstractMatrix, 
                         d::AbstractVector, c::AbstractVector, 
                         H::AbstractMatrix, Q::AbstractMatrix, 
-                        t::Integer)
+                        t::Integer, T_len::Integer)
     # Store views 
     a= view(filter.a,:,t)
     P= view(filter.P,:,:,t)
@@ -485,7 +486,7 @@ function update_filter!(filter::WoodburyFilter,
                         Z::AbstractMatrix, T::AbstractMatrix, 
                         d::AbstractVector, c::AbstractVector, 
                         Hi::AbstractMatrix, Q::AbstractMatrix, 
-                        t::Integer)
+                        t::Integer, T_len::Integer)
     # Store views 
     a= view(filter.a,:,t)
     P= view(filter.P,:,:,t)
@@ -518,7 +519,7 @@ function update_filter!(filter::WoodburyFilter,
 end
 
 """
-    update_filter!(filter, T, d, c, H, Q, t)
+    update_filter!(filter, T, d, c, H, Q, t, T_len)
 
 Update Kalman filter components at time `t` when observation ``y_t`` is missing,
 i.e. NaN, storing the results in `filter`.
@@ -530,6 +531,7 @@ i.e. NaN, storing the results in `filter`.
   - `H::AbstractMatrix`     : system matrix ``H``
   - `Q::AbstractMatrix`     : system matrix ``Q``
   - `t::Integer`            : time
+  - `T_len::Integer`        : number of obs
 
 #### Returns
   - `filter::KalmanFilter`  : Kalman filter components
@@ -538,7 +540,7 @@ function update_filter!(filter::MultivariateFilter,
                         Z::AbstractMatrix, T::AbstractMatrix, 
                         c::AbstractVector, 
                         H::AbstractMatrix, Q::AbstractMatrix, 
-                        t::Integer)
+                        t::Integer, T_len::Integer)
     # Store views 
     a= view(filter.a,:,t)
     P= view(filter.P,:,:,t)
@@ -575,7 +577,7 @@ function update_filter!(filter::WoodburyFilter,
                         Z::AbstractMatrix, T::AbstractMatrix, 
                         c::AbstractVector, 
                         Hi::AbstractMatrix, Q::AbstractMatrix, 
-                        t::Integer)
+                        t::Integer, T_len::Integer)
     # Store views 
     a= view(filter.a,:,t)
     P= view(filter.P,:,:,t)
@@ -637,9 +639,9 @@ function kalman_filter!(filter::MultivariateFilter, sys::LinearTimeInvariant)
 
         # update filter
         if any(isnan, y_t)
-            update_filter!(filter, sys.Z, sys.T, sys.c, sys.H, sys.Q, t)
+            update_filter!(filter, sys.Z, sys.T, sys.c, sys.H, sys.Q, t, T_len)
         else
-            update_filter!(filter, y_t, sys.Z, sys.T, sys.d, sys.c, sys.H, sys.Q, t)
+            update_filter!(filter, y_t, sys.Z, sys.T, sys.d, sys.c, sys.H, sys.Q, t, T_len)
         end
 	end
 	
@@ -665,9 +667,9 @@ function kalman_filter!(filter::MultivariateFilter, sys::LinearTimeVariant)
 
         # update filter
         if any(isnan, y_t)
-            update_filter!(filter, sys.Z[t], sys.T[t], c_t, sys.H[t], sys.Q[t], t)
+            update_filter!(filter, sys.Z[t], sys.T[t], c_t, sys.H[t], sys.Q[t], t, T_len)
         else
-            update_filter!(filter, y_t, sys.Z[t], sys.T[t], d_t, c_t, sys.H[t], sys.Q[t], t)
+            update_filter!(filter, y_t, sys.Z[t], sys.T[t], d_t, c_t, sys.H[t], sys.Q[t], t, T_len)
         end
 	end
 	
@@ -714,9 +716,9 @@ function kalman_filter!(filter::WoodburyFilter, sys::LinearTimeInvariant)
 
         # update filter
         if any(isnan, y_t)
-            update_filter!(filter, sys.Z, sys.T, sys.c, Hi, sys.Q, t)
+            update_filter!(filter, sys.Z, sys.T, sys.c, Hi, sys.Q, t, T_len)
         else
-            update_filter!(filter, y_t, sys.Z, sys.T, sys.d, sys.c, Hi, sys.Q, t)
+            update_filter!(filter, y_t, sys.Z, sys.T, sys.d, sys.c, Hi, sys.Q, t, T_len)
         end
 	end
 	
@@ -753,9 +755,9 @@ function kalman_filter!(filter::WoodburyFilter, sys::LinearTimeVariant)
 
         # update filter
         if any(isnan, y_t)
-            update_filter!(filter, sys.Z[t], sys.T[t], c_t, Hi, sys.Q[t], t)
+            update_filter!(filter, sys.Z[t], sys.T[t], c_t, Hi, sys.Q[t], t, T_len)
         else
-            update_filter!(filter, y_t, sys.Z[t], sys.T[t], d_t, c_t, Hi, sys.Q[t], t)
+            update_filter!(filter, y_t, sys.Z[t], sys.T[t], d_t, c_t, Hi, sys.Q[t], t, T_len)
         end
 	end
 	
