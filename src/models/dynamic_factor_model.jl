@@ -344,8 +344,11 @@ function init_system!(sys::StateSpaceSystem, model::DynamicFactorModel)
     sys.a1.= zero(T)
     # P
     sys.P1.= zero(T)
+    # @inbounds @fastmath for i in 1:model.r
+    #     sys.P1[i,i]= inv(one(T) - model.ϕ.diag[i]^2)
+    # end
     @inbounds @fastmath for i in 1:model.r
-        sys.P1[i,i]= inv(one(T) - model.ϕ.diag[i]^2)
+        sys.P1[i,i]= one(T)
     end
     
     return nothing
