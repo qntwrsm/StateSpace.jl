@@ -447,15 +447,21 @@ function update_error!(model::SpatialErrorModel, quad::AbstractMatrix, pen::Pena
 
     # Spatial dependence
     # Closure of functions
-    f_cl(x::AbstractVector)= f_ρ(x, model, quad)
-    ∇f_cl!(∇f::AbstractVector, x::AbstractVector)=  ∇f_ρ!(∇f, x, model, quad)
-    prox_cl!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
+    f(x::AbstractVector)= f_ρ(x, model, quad)
+    ∇f!(∇f::AbstractVector, x::AbstractVector)=  ∇f_ρ!(∇f, x, model, quad)
+
+    # Initial value for proximal operator
+    x0= logit.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
+
+    # Proximal operators
+    prox_g!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
+    prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, x0)
 
     # Transform parameters
     model.ρ.= logit.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
 
-    # Penalized estimation via proximal gradient method
-    prox_grad!(model.ρ, f_cl, ∇f_cl!, prox_cl!, style="nesterov")
+    # Penalized estimation via admm
+    model.ρ.= admm!(model.ρ, prox_f!, prox_g!)
 
     # Transform parameters back
     model.ρ.= logistic.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
