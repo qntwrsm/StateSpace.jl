@@ -381,12 +381,20 @@ function loglik(filter::KalmanFilter, sys::StateSpaceSystem, model::DynamicFacto
         # Add Jacobian determinant term
         ll-= .5 * T_len * logdet(C)
 
+        # Z'×H⁻¹×Z
+        tmp_pn= transpose(model.Λ) * prec(model)
+        tmp= tmp_pn * model.Λ
+        # (Z'×H⁻¹×Z)⁻¹ 
+        # perform pseudo inverse as Λ can contain zero columns
+        pseudo= pinv(tmp)
+        # Projection
+        M= I - model.Λ * pseudo * tmp_pn
+
         # Add projected out term
         ll-= .5 * (n - model.r) * T_len * log(2*π)
         e= similar(model.y, n)
         @inbounds @fastmath for t in 1:T_len
-            e.= view(model.y,:,t)
-            mul!(e, model.Λ, view(sys.y,:,t), -1., 1.)
+            mul!(e, M, view(model.y,:,t))
             ll-= .5 * dot(e, prec(model), e)
         end
     end
@@ -514,16 +522,20 @@ function update_model!(model::DynamicFactorModel, state::EMOptimizerState,
 end
 
 # Forecast
-function forecast(model::DynamicFactorModel, h::Integer)
+function reinstantiate(model::DynamicFactorModel, h::Integer)
     # number of time series
     n= size(model.y,1)
 
-    # create forecast variables
+    # expand
+    forecast_mean= forecast(model.mean, h)
     y_f= hcat(model.y, fill(NaN, n, h))
 
+    return DynamicFactorModel(y_f, model.r, forecast_mean, model.Λ, model.ϕ, model.error)
+end
+
+function forecast(model::DynamicFactorModel, h::Integer)
     # reinstantiate
-    forecast_mean= forecast(model.mean, h)
-    forecast_model= DynamicFactorModel(y_f, model.r, forecast_mean, model.Λ, model.ϕ, model.error)
+    forecast_model= reinstantiate(model, h)
     
     # State space system
     sys= create_system(forecast_model, :multivariate)
