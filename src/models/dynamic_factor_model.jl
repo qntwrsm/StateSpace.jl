@@ -353,7 +353,7 @@ end
 
 # Estimation
 # Log-likelihood
-function loglik(filter::KalmanFilter, sys::StateSpaceSystem, model::DynamicFactorModel, method::Symbol)
+function loglik(filter::KalmanFilter, model::DynamicFactorModel, method::Symbol)
     # Compute log-likelihood
     ll= loglik(filter)
 

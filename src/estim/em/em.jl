@@ -115,7 +115,7 @@ function em!(model::StateSpaceModel, pen::NamedTuple;
         iter+=1
     end
    
-    return loglik(filter, sys, model, method)
+    return loglik(filter, model, method)
 end
 
 """
@@ -197,5 +197,5 @@ function ecm!(model::StateSpaceModel, pen::NamedTuple;
         iter+=1
     end
    
-    return loglik(filter, sys, model, method)
+    return loglik(filter, model, method)
 end
