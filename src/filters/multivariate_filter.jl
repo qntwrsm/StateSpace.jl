@@ -633,7 +633,7 @@ function kalman_filter!(filter::MultivariateFilter, sys::LinearTimeInvariant)
 	filter.P[:,:,1]= sys.P1
 	
 	# Filter
-	@inbounds @fastmath for t in 1:T_len
+	@inbounds for t in 1:T_len
         # data
         y_t= view(sys.y, :, t)
 
@@ -657,13 +657,9 @@ function kalman_filter!(filter::MultivariateFilter, sys::LinearTimeVariant)
 	filter.P[:,:,1]= sys.P1
 	
 	# Filter
-	@inbounds @fastmath for t in 1:T_len
+	@inbounds for t in 1:T_len
         # data
         y_t= view(sys.y, :, t)
-
-        println(y_t')
-        println(typeof(y_t[1]))
-        println(isnan(y_t[1]))
 
         # means
         d_t= view(sys.d, :, t)
@@ -714,7 +710,7 @@ function kalman_filter!(filter::WoodburyFilter, sys::LinearTimeInvariant)
 	filter.P[:,:,1]= sys.P1
 	
 	# Filter
-	@inbounds @fastmath for t in 1:T_len
+	@inbounds for t in 1:T_len
         # data
         y_t= view(sys.y, :, t)
 
@@ -741,7 +737,7 @@ function kalman_filter!(filter::WoodburyFilter, sys::LinearTimeVariant)
 	filter.P[:,:,1]= sys.P1
 	
 	# Filter
-	@inbounds @fastmath for t in 1:T_len
+	@inbounds for t in 1:T_len
         # data
         y_t= view(sys.y, :, t)
 

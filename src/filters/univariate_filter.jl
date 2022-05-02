@@ -240,7 +240,7 @@ function kalman_filter!(filter::UnivariateFilter, sys::LinearTimeInvariant)
 	filter.P[:,:,1,1]= sys.P1
 	
 	# Filter
-	@inbounds @fastmath for t in 1:T_len
+	@inbounds for t in 1:T_len
 		for i in 1:n
 	        # Store view
 			Z_i= view(Z,i,:)
@@ -277,7 +277,7 @@ function kalman_filter!(filter::UnivariateFilter, sys::LinearTimeVariant)
 	filter.P[:,:,1,1]= sys.P1
 	
 	# Filter
-	@inbounds @fastmath for t in 1:T_len
+	@inbounds for t in 1:T_len
 		# store
 		Z_t= sys.Z[t]
 		H_t= sys.H[t]
