@@ -52,7 +52,7 @@ function forecast(sys::LinearTimeInvariant, h::Integer)
     kalman_filter!(filter, sys)
 
     # forecasts
-    f= Forecast(n, h, h, T)
+    f= Forecast(n, p, h, T)
     @inbounds @fastmath for i in 1:h
         # Store filter forecast output
         f.F_hat[:,:,i]= view(filter.F,:,:,T_len-h+i)
@@ -82,7 +82,7 @@ function forecast(sys::LinearTimeVariant, h::Integer)
     kalman_filter!(filter, sys)
 
     # forecasts
-    f= Forecast(n, h, h, T)
+    f= Forecast(n, p, h, T)
     @inbounds @fastmath for i in 1:h
         # Store filter forecast output
         f.F_hat[:,:,i]= view(filter.F,:,:,T_len-h+i)
