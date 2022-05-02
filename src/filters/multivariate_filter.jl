@@ -661,6 +661,10 @@ function kalman_filter!(filter::MultivariateFilter, sys::LinearTimeVariant)
         # data
         y_t= view(sys.y, :, t)
 
+        println(y_t')
+        println(typeof(y_t[1]))
+        println(isnan(y_t[1]))
+
         # means
         d_t= view(sys.d, :, t)
         c_t= view(sys.c, :, t)
