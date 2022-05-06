@@ -67,7 +67,7 @@ end
 
 Constructor for a spatial error model specification instance of the error model
 type, with hyperparameter `ρ`, idiosyncratic error specification `error`,
-spatial weight matrix `W`, and groups structure `groups`.
+spatial weight matrix `W`, and group structure `groups`.
 """
 struct SpatialErrorModel{Tε, TΣ, Tρ, Tf, TW, TG, Tg, Te} <: AbstractErrorModel
     ε::Tε       # spatial errors
@@ -81,8 +81,12 @@ struct SpatialErrorModel{Tε, TΣ, Tρ, Tf, TW, TG, Tg, Te} <: AbstractErrorMode
     error::Te   # idiosyncratic error specification
 end
 # Constructor
-function SpatialErrorModel(ε::AbstractMatrix, ρ::AbstractVector, W::AbstractMatrix, 
-                            groups::AbstractVector, error::AbstractErrorModel)
+function SpatialErrorModel( ε::AbstractMatrix, 
+                            ρ::AbstractVector, 
+                            W::AbstractMatrix, 
+                            groups::AbstractVector, 
+                            error::AbstractErrorModel
+                        )
     # dims
     n= sum(groups)
 
@@ -99,10 +103,48 @@ function SpatialErrorModel(ε::AbstractMatrix, ρ::AbstractVector, W::AbstractMa
     return SpatialErrorModel(ε, Σ, Ω, ρ, ρ_max, W, G, groups, error)
 end
 
+"""
+    SpatialMovingAverageModel <: AbstractErrorModel
+
+Constructor for a spatial moving average model specification instance of the
+error model type, with hyperparameter `λ`, idiosyncratic error specification
+`error`, spatial weight matrix `W`, and group structure `groups`.
+"""
+struct SpatialMovingAverageModel{Tε, TΣ, Tλ, TW, TG, Tg, Te} <: AbstractErrorModel
+    ε::Tε       # spatial errors
+    Σ::TΣ       # covariance matrix
+    Ω::TΣ       # precision matrix
+    λ::Tλ       # spatial dependence
+    W::TW       # spatial weight matrix
+    G::TG       # spatial MA polynomial      
+    groups::Tg  # group structure
+    error::Te   # idiosyncratic error specification
+end
+# Constructor
+function SpatialMovingAverageModel( ε::AbstractMatrix, 
+                                    λ::AbstractVector, 
+                                    W::AbstractMatrix, 
+                                    groups::AbstractVector, 
+                                    error::AbstractErrorModel
+                                )
+    # dims
+    n= sum(groups)
+
+    # covariance and precision matrices
+    Σ= Symmetric(similar(ε, n, n))
+    Ω= similar(Σ)
+
+    # spatial MA polynomial
+    G= similar(λ, n, n)
+    
+    return SpatialMovingAverageModel(ε, Σ, Ω, λ, W, G, groups, error)
+end
+
 # Methods
 nparams(model::Independent)= length(model.σ)
 nparams(model::Idiosyncratic)= length(model.Σ) * (length(model.Σ) + 1) ÷ 2
 nparams(model::SpatialErrorModel)= length(model.ρ) + nparams(model.error)
+nparams(model::SpatialMovingAverageModel)= length(model.λ) + nparams(model.error)
 
 get_params!(ψ::AbstractVector, model::Independent)= ψ.= model.σ
 function get_params!(ψ::AbstractVector, model::Idiosyncratic)
@@ -119,6 +161,12 @@ end
 function get_params!(ψ::AbstractVector, model::SpatialErrorModel)
     get_params!(view(ψ,1:nparams(model.error)), model.error)
     ψ[nparams(model.error)+1:end].= model.ρ
+
+    return nothing
+end
+function get_params!(ψ::AbstractVector, model::SpatialMovingAverageModel)
+    get_params!(view(ψ,1:nparams(model.error)), model.error)
+    ψ[nparams(model.error)+1:end].= model.λ
 
     return nothing
 end
@@ -142,6 +190,13 @@ function store_params!(model::SpatialErrorModel, ψ::AbstractVector)
 
     return nothing
 end
+function store_params!(model::SpatialMovingAverageModel, ψ::AbstractVector)
+    n= length(ψ)
+    store_params!(model.error, view(ψ,1:nparams(model.error)))
+    model.λ.= view(ψ,nparams(model.error)+1:n)
+
+    return nothing
+end
 
 """
     resid(model)
@@ -161,9 +216,8 @@ Retrieve covariance matrix of error model
 #### Arguments
   - `model::AbstractErrorModel` : error model
 """
+cov(model::AbstractErrorModel)= model.Σ
 cov(model::Independent)= Diagonal(model.σ)
-cov(model::Idiosyncratic)= model.Σ
-cov(model::SpatialErrorModel)= model.Σ
 
 """
     prec(model)
@@ -173,9 +227,8 @@ Retrieve precision matrix of error model
 #### Arguments
   - `model::AbstractErrorModel` : error model
 """
+prec(model::AbstractErrorModel)= model.Ω
 prec(model::Independent)= Diagonal(model.ω)
-prec(model::Idiosyncratic)= model.Ω
-prec(model::SpatialErrorModel)= model.Ω
 
 """
     init_ρ!(ρ, ε, W, groups, ρ_max)
@@ -300,6 +353,27 @@ function init_error!(model::SpatialErrorModel, init::NamedTuple)
     model.Ω.data.= transpose(model.G) * prec(model.error) * model.G
     model.Σ.= model.Ω
     LinearAlgebra.inv!(cholesky!(model.Σ))
+
+    return nothing
+end
+function init_error!(model::SpatialMovingAverageModel, init::NamedTuple)
+    # spatial dependence
+    haskey(init, :error) ? model.λ.= init.error.λ : zero(eltype(model.λ))
+
+    # spatial MA polynomial
+    spatial_polynomial!(model.G, model.λ, model.W, model.groups)
+
+    # factorization
+    fac= lu(model.G)
+
+    # idsiosyncratic errors
+    ldiv!(resid(model.error), fac, resid(model))
+    init_error!(model.error, init)
+
+    # variance and precision
+    model.Σ.data.= model.G * cov(model.error) * transpose(model.G)
+    model.Ω.= model.Σ
+    LinearAlgebra.inv!(cholesky!(model.Ω))
 
     return nothing
 end
