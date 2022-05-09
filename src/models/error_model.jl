@@ -378,6 +378,8 @@ function init_error!(model::SpatialMovingAverageModel, init::NamedTuple)
     return nothing
 end
 
+# Estimation
+# Log-likelihood
 """
     f_ρ(ρ, model, quad)
 
@@ -421,6 +423,51 @@ function f_ρ(ρ::AbstractVector, model::SpatialErrorModel, quad::AbstractMatrix
     return f * inv(2 * T) - d - log(s)
 end
 
+"""
+    f_λ(λ, model, quad)
+
+Compute objective function value `f` w.r.t. spatial dependence ``λ`` (average
+negative log-likelihood w.r.t. ``λ``).
+
+#### Arguments
+    - `λ::AbstractVector`               : spatial dependence
+    - `model::SpatialMovingAverageModel`: error model
+    - `quad::AbstractMatrix`            : quadratic smoother state space model component
+
+#### Returns
+    - `f::Real`   : objective function value
+"""
+function f_λ(λ::AbstractVector, model::SpatialMovingAverageModel, quad::AbstractMatrix)
+    # Get dims
+    (n,T)= size(model.ε)
+
+    # transform parameters back
+    λ.= logistic.(λ)
+    # Spatial lag polynomial G
+    spatial_polynomial!(model.G, λ, model.W, model.groups)
+    # transform parameters
+    λ.= logit.(λ)    
+
+    # error component
+    e= model.ε * transpose(model.ε) .+ quad
+
+    # variance and precision
+    model.Σ.data.= model.G * cov(model.error) * transpose(model.G)
+    model.Ω.= model.Σ
+    LinearAlgebra.inv!(cholesky!(model.Ω))
+
+    # objective function 
+    f= zero(eltype(ρ))
+    @inbounds @fastmath for i in 1:n
+        f+= dot(view(model.Ω,:,i), view(e,:,i))
+    end
+    # logabsdet
+    d,s= logabsdet(lu!(model.G))
+
+    return f * inv(2 * T) + d + log(s)
+end
+
+# Gradient
 """
     ∇f_ρ!(∇f, ρ, model, quad)
 
@@ -473,6 +520,63 @@ function ∇f_ρ!(∇f::AbstractVector, ρ::AbstractVector, model::SpatialErrorM
     return nothing
 end
 
+"""
+    ∇f_λ!(∇f, λ, model, quad)
+
+Compute gradient `∇f` of objective function `f` w.r.t. spatial dependence ``λ``
+(gradient of average negative log-likelihood w.r.t. ``λ``).
+
+#### Arguments
+  - `λ::AbstractVector`                 : spatial dependence
+  - `model::SpatialMovingAverageModel`  : error model
+  - `quad::AbstractMatrix`              : quadratic smoother state space model component
+
+#### Returns
+  - `∇f::AbstractVector`: gradient
+"""
+function ∇f_λ!(∇f::AbstractVector, λ::AbstractVector, 
+                model::SpatialMovingAverageModel, quad::AbstractMatrix)
+    # Get dims
+    T= size(resid(model),2)
+
+    # transform parameters back
+    λ.= logistic.(λ)
+    # Spatial lag polynomial G
+    spatial_polynomial!(model.G, λ, model.W, model.groups)
+    # transform parameters
+    λ.= logit.(λ)
+
+    # variance and precision
+    tmp_nn= cov(model.error) * transpose(model.G)
+    mul!(cov(model).data, model.G, tmp_nn)
+    prec(model).= cov(model)
+    LinearAlgebra.inv!(cholesky!(prec(model)))
+
+    # log-determinant component 
+    ∇logdet= model.W / lu!(model.G)
+
+    # error component
+    tmp_nn.= quad
+    mul!(tmp_nn, resid(model), transpose(resid(model)), 1., 1.)
+    e= tmp_nn * transpose(∇logdet)
+
+    # gradient
+    idx= 1
+    @inbounds @fastmath for i in 1:length(λ)
+        rng= idx:idx+model.groups[i]-1
+        ∇f_i= zero(eltype(∇f))
+        for j in rng
+            ∇f_i+= ∇logdet[j,j] - inv(T) * dot(view(e,:,j), view(prec(model),:,j))
+        end
+        jacob= logistic(λ[i]) * (one(λ[i]) - logistic(λ[i]))
+        ∇f[i]= ∇f_i * jacob
+        idx+= model.groups[i]
+    end
+
+    return nothing
+end
+
+# EM
 """
     update_error!(model, quad, pen)
 
@@ -547,6 +651,46 @@ function update_error!(model::SpatialErrorModel, quad::AbstractMatrix, pen::Pena
     model.Ω.data.= transpose(model.G) * prec(model.error) * model.G
     model.Σ.= model.Ω
     LinearAlgebra.inv!(cholesky!(model.Σ))
+
+    return nothing
+end
+function update_error!(model::SpatialMovingAverageModel, quad::AbstractMatrix, pen::Penalization)
+    # inverse
+    Ginv= inv(model.G)
+
+    # idiosyncratic components
+    mul!(resid(model.error), Ginv, resid(model))
+    quad_spat= Ginv * quad * transpose(Ginv)
+    update_error!(model.error, quad_spat, pen)
+
+    # Spatial dependence
+    # Closure of functions
+    f(x::AbstractVector)= f_λ(x, model, quad)
+    ∇f!(∇f::AbstractVector, x::AbstractVector)=  ∇f_λ!(∇f, x, model, quad)
+
+    # Initial value for proximal operator
+    x0= logit.(model.λ)
+
+    # Proximal operators
+    prox_g!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
+    prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, x0)
+
+    # Transform parameters
+    model.λ.= logit.(model.λ)
+
+    # Penalized estimation via admm
+    model.λ.= admm!(model.λ, prox_f!, prox_g!)
+
+    # Transform parameters back
+    model.λ.= logistic.(model.λ)
+
+    # Spatial lag polynomial G
+    spatial_polynomial!(model.G, model.λ, model.W, model.groups)
+
+    # variance and precision
+    model.Σ.data.= model.G * cov(model.error) * transpose(model.G)
+    model.Ω.= model.Σ
+    LinearAlgebra.inv!(cholesky!(model.Ω))
 
     return nothing
 end
