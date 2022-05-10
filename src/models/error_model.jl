@@ -245,8 +245,12 @@ residuals `ε`, storing the result in `ρ`.
 #### Returns
   - `ρ::AbstractVector` : spatial dependence
 """
-function init_ρ!(ρ::AbstractVector, ε::AbstractMatrix, W::AbstractMatrix, 
-                groups::AbstractVector, ρ_max::Real)
+function init_ρ!(   ρ::AbstractVector, 
+                    ε::AbstractMatrix, 
+                    W::AbstractMatrix, 
+                    groups::AbstractVector, 
+                    ρ_max::Real
+                )
     # squared residuals
     ε_sq= ε * transpose(ε)
 
@@ -284,8 +288,11 @@ spatial weights `W`, storing the result in `G`.
 #### Returns
   - `G::AbstractMatrix` : spatial lag polynomial  
 """
-function spatial_polynomial!(G::AbstractMatrix, ρ::AbstractVector, 
-                                W::AbstractMatrix, groups::AbstractVector)
+function spatial_polynomial!(   G::AbstractMatrix, 
+                                ρ::AbstractVector, 
+                                W::AbstractMatrix, 
+                                groups::AbstractVector
+                            )
     idx= 1
     @inbounds @fastmath for i in 1:length(ρ)
         rng= idx:idx+groups[i]-1
