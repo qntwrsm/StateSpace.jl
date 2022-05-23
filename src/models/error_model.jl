@@ -107,14 +107,14 @@ end
     SpatialMovingAverageModel <: AbstractErrorModel
 
 Constructor for a spatial moving average model specification instance of the
-error model type, with hyperparameter `λ`, idiosyncratic error specification
+error model type, with hyperparameter `ρ`, idiosyncratic error specification
 `error`, spatial weight matrix `W`, and group structure `groups`.
 """
-struct SpatialMovingAverageModel{Tε, TΣ, Tλ, TW, TG, Tg, Te} <: AbstractErrorModel
+struct SpatialMovingAverageModel{Tε, TΣ, Tρ, TW, TG, Tg, Te} <: AbstractErrorModel
     ε::Tε       # spatial errors
     Σ::TΣ       # covariance matrix
     Ω::TΣ       # precision matrix
-    λ::Tλ       # spatial dependence
+    ρ::Tλ       # spatial dependence
     W::TW       # spatial weight matrix
     G::TG       # spatial MA polynomial      
     groups::Tg  # group structure
@@ -122,7 +122,7 @@ struct SpatialMovingAverageModel{Tε, TΣ, Tλ, TW, TG, Tg, Te} <: AbstractError
 end
 # Constructor
 function SpatialMovingAverageModel( ε::AbstractMatrix, 
-                                    λ::AbstractVector, 
+                                    ρ::AbstractVector, 
                                     W::AbstractMatrix, 
                                     groups::AbstractVector, 
                                     error::AbstractErrorModel
@@ -137,14 +137,14 @@ function SpatialMovingAverageModel( ε::AbstractMatrix,
     # spatial MA polynomial
     G= similar(λ, n, n)
     
-    return SpatialMovingAverageModel(ε, Σ, Ω, λ, W, G, groups, error)
+    return SpatialMovingAverageModel(ε, Σ, Ω, ρ, W, G, groups, error)
 end
 
 # Methods
 nparams(model::Independent)= length(model.σ)
 nparams(model::Idiosyncratic)= length(model.Σ) * (length(model.Σ) + 1) ÷ 2
 nparams(model::SpatialErrorModel)= length(model.ρ) + nparams(model.error)
-nparams(model::SpatialMovingAverageModel)= length(model.λ) + nparams(model.error)
+nparams(model::SpatialMovingAverageModel)= length(model.ρ) + nparams(model.error)
 
 get_params!(ψ::AbstractVector, model::Independent)= ψ.= model.σ
 function get_params!(ψ::AbstractVector, model::Idiosyncratic)
@@ -166,7 +166,7 @@ function get_params!(ψ::AbstractVector, model::SpatialErrorModel)
 end
 function get_params!(ψ::AbstractVector, model::SpatialMovingAverageModel)
     get_params!(view(ψ,1:nparams(model.error)), model.error)
-    ψ[nparams(model.error)+1:end].= model.λ
+    ψ[nparams(model.error)+1:end].= model.ρ
 
     return nothing
 end
@@ -240,7 +240,7 @@ Retrieve spatial dependence parameter of error model
 """
 spatial(model::AbstractErrorModel)= nothing
 spatial(model::SpatialErrorModel)= model.ρ
-spatial(model::SpatialMovingAverageModel)= model.λ
+spatial(model::SpatialMovingAverageModel)= model.ρ
 
 """
     init_ρ!(ρ, ε, W, groups, ρ_max)
@@ -377,10 +377,10 @@ function init_error!(model::SpatialErrorModel, init::NamedTuple)
 end
 function init_error!(model::SpatialMovingAverageModel, init::NamedTuple)
     # spatial dependence
-    haskey(init, :error) ? model.λ.= init.error.λ : zero(eltype(model.λ))
+    haskey(init, :error) ? model.ρ.= init.error.ρ : zero(eltype(model.ρ))
 
     # spatial MA polynomial
-    spatial_polynomial!(model.G, model.λ, model.W, model.groups)
+    spatial_polynomial!(model.G, model.ρ, model.W, model.groups)
 
     # factorization
     fac= lu(model.G)
@@ -672,23 +672,23 @@ function update_error!(model::SpatialMovingAverageModel, quad::AbstractMatrix, p
     ∇f!(∇f::AbstractVector, x::AbstractVector)=  ∇f_spatial!(∇f, x, model, quad)
 
     # Initial value for proximal operator
-    x0= logit.(model.λ)
+    x0= logit.(model.ρ)
 
     # Proximal operators
     prox_g!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
     prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, x0)
 
     # Transform parameters
-    model.λ.= logit.(model.λ)
+    model.ρ.= logit.(model.ρ)
 
     # Penalized estimation via admm
-    model.λ.= admm!(model.λ, prox_f!, prox_g!)
+    model.ρ.= admm!(model.ρ, prox_f!, prox_g!)
 
     # Transform parameters back
-    model.λ.= logistic.(model.λ)
+    model.ρ.= logistic.(model.ρ)
 
     # Spatial lag polynomial G
-    spatial_polynomial!(model.G, model.λ, model.W, model.groups)
+    spatial_polynomial!(model.G, model.ρ, model.W, model.groups)
 
     # variance and precision
     cov(model).data.= model.G * cov(model.error) * transpose(model.G)
