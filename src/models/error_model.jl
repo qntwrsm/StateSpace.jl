@@ -231,6 +231,18 @@ prec(model::AbstractErrorModel)= model.Ω
 prec(model::Independent)= Diagonal(model.ω)
 
 """
+    spatial(model)
+
+Retrieve spatial dependence parameter of error model
+
+#### Arguments
+  - `model::AbstractErrorModel` : error model
+"""
+spatial(model::AbstractErrorModel)= nothing
+spatial(model::SpatialErrorModel)= model.ρ
+spatial(model::SpatialMovingAverageModel)= model.λ
+
+"""
     init_ρ!(ρ, ε, W, groups, ρ_max)
 
 Initialize spatial dependence parameter `ρ` using spatial lag regression of
