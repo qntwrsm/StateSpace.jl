@@ -114,7 +114,7 @@ struct SpatialMovingAverageModel{Tε, TΣ, Tρ, TW, TG, Tg, Te} <: AbstractError
     ε::Tε       # spatial errors
     Σ::TΣ       # covariance matrix
     Ω::TΣ       # precision matrix
-    ρ::Tλ       # spatial dependence
+    ρ::Tρ       # spatial dependence
     W::TW       # spatial weight matrix
     G::TG       # spatial MA polynomial      
     groups::Tg  # group structure
