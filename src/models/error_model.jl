@@ -135,7 +135,7 @@ function SpatialMovingAverageModel( ε::AbstractMatrix,
     Ω= similar(Σ)
 
     # spatial MA polynomial
-    G= similar(λ, n, n)
+    G= similar(ρ, n, n)
     
     return SpatialMovingAverageModel(ε, Σ, Ω, ρ, W, G, groups, error)
 end
@@ -193,7 +193,7 @@ end
 function store_params!(model::SpatialMovingAverageModel, ψ::AbstractVector)
     n= length(ψ)
     store_params!(model.error, view(ψ,1:nparams(model.error)))
-    model.λ.= view(ψ,nparams(model.error)+1:n)
+    model.ρ.= view(ψ,nparams(model.error)+1:n)
 
     return nothing
 end
