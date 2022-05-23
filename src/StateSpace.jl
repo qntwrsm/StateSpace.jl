@@ -37,7 +37,7 @@ export
 	GroupLasso,
 	SparseGroupLasso,
 	# models
-	Independent, Idiosyncratic, SpatialErrorModel,
+	Independent, Idiosyncratic, SpatialErrorModel, SpatialMovingAverageModel,
 	NoConstant, Constant, Exogeneous,
 	DynamicFactorModel,
     DynamicNelsonSiegelModel,

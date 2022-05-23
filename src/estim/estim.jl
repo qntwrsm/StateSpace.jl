@@ -28,18 +28,18 @@ abstract type Penalization end
 struct NoPen <: Penalization
 end
 
-struct Lasso{Tγ, Tw} <: Penalization
+mutable struct Lasso{Tγ, Tw} <: Penalization
 	γ::Tγ		# penalization strength
 	weights::Tw	# weights
 end
 
-struct GroupLasso{Tγ, Tw, Tg} <: Penalization
+mutable struct GroupLasso{Tγ, Tw, Tg} <: Penalization
 	γ::Tγ		# penalization strength
 	weights::Tw	# weights
 	groups::Tg	# group structure
 end
 
-struct SparseGroupLasso{Tγ, Tw1, Tw2, Tg} <: Penalization
+mutable struct SparseGroupLasso{Tγ, Tw1, Tw2, Tg} <: Penalization
 	γ::Tγ			# penalization strength
 	α::Tγ			# mixing parameter
 	weights_l1::Tw1	# weights ℓ₁-norm
@@ -59,8 +59,8 @@ the result in `x`.
   - `λ::Real`           : scaling parameter
   - `pen::Penalization` : penalization variables
 """
+prox!(x::AbstractVector, λ::Real, pen::NoPen)= nothing
 prox!(x::AbstractVector, λ::Real, pen::Lasso)= x.= soft_thresh.(x, λ .* pen.γ .* vec(pen.weights))
-
 function prox!(x::AbstractVector, λ::Real, pen::GroupLasso)
     idx= 1
     for g in 1:length(pen.groups)
@@ -72,7 +72,6 @@ function prox!(x::AbstractVector, λ::Real, pen::GroupLasso)
 
     return nothing
 end 
-
 function prox!(x::AbstractVector, λ::Real, pen::SparseGroupLasso)
     idx= 1
     x.= soft_thresh.(x, λ .* pen.γ .* pen.α .* vec(pen.weights_l1))
