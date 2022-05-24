@@ -68,10 +68,6 @@ function em!(model::StateSpaceModel, pen::NamedTuple;
     # Initialize state
     state= EMState(ψ, similar(ψ), similar(ψ), similar(ψ), similar(ψ, p, p), 
                     similar(ψ, p, p), similar(ψ, p, p), similar(ψ, p, p))
-    
-    # Initialize state
-    state= ECMState(ψ, similar(ψ), similar(ψ), similar(ψ, p, p), similar(ψ, p, p), 
-                    similar(ψ, p, p), similar(ψ, p, p))
 
     # Initialize filter and smoother
     T= eltype(model.y)  # type

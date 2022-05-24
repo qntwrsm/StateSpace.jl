@@ -287,10 +287,10 @@ function init_ρ!(   ρ::AbstractVector,
 end
 
 """
-    spatial_polynomial!(G, ρ, W, groups)
+    spatial_ar_polynomial!(G, ρ, W, groups)
 
-Compute spatial lag polynomial matrix `G` based on spatial dependence `ρ` and
-spatial weights `W`, storing the result in `G`.
+Compute spatial autoregressive lag polynomial matrix `G` based on spatial
+dependence `ρ` and spatial weights `W`, storing the result in `G`.
 
 #### Arguments
   - `ρ::AbstractVector`     : spatial dependence
@@ -298,17 +298,49 @@ spatial weights `W`, storing the result in `G`.
   - `groups::AbstractVector`: group structure
 
 #### Returns
-  - `G::AbstractMatrix` : spatial lag polynomial  
+  - `G::AbstractMatrix` : spatial AR lag polynomial  
 """
-function spatial_polynomial!(   G::AbstractMatrix, 
+function spatial_ar_polynomial!(G::AbstractMatrix, 
                                 ρ::AbstractVector, 
                                 W::AbstractMatrix, 
                                 groups::AbstractVector
-                            )
+                                )
     idx= 1
     @inbounds @fastmath for i in 1:length(ρ)
         rng= idx:idx+groups[i]-1
         G[rng,:].= -ρ[i] .* view(W,rng,:)
+        idx+= groups[i]
+    end
+    @inbounds @fastmath for i in axes(G,1)
+        G[i,i]+= one(eltype(G)) 
+    end
+
+    return nothing
+end
+
+"""
+    spatial_ma_polynomial!(G, ρ, W, groups)
+
+Compute spatial moving average lag polynomial matrix `G` based on spatial
+dependence `ρ` and spatial weights `W`, storing the result in `G`.
+
+#### Arguments
+  - `ρ::AbstractVector`     : spatial dependence
+  - `W::AbstractMatrix`     : spatial weight matrix
+  - `groups::AbstractVector`: group structure
+
+#### Returns
+  - `G::AbstractMatrix` : spatial MA lag polynomial  
+"""
+function spatial_ma_polynomial!(G::AbstractMatrix, 
+                                ρ::AbstractVector, 
+                                W::AbstractMatrix, 
+                                groups::AbstractVector
+                                )
+    idx= 1
+    @inbounds @fastmath for i in 1:length(ρ)
+        rng= idx:idx+groups[i]-1
+        G[rng,:].= ρ[i] .* view(W,rng,:)
         idx+= groups[i]
     end
     @inbounds @fastmath for i in axes(G,1)
@@ -362,7 +394,7 @@ function init_error!(model::SpatialErrorModel, init::NamedTuple)
     haskey(init, :error) ? model.ρ.= init.error.ρ : init_ρ!(model.ρ, resid(model), model.W, model.groups, model.ρ_max)
 
     # spatial lag polynomial
-    spatial_polynomial!(model.G, model.ρ, model.W, model.groups)
+    spatial_ar_polynomial!(model.G, model.ρ, model.W, model.groups)
 
     # idsiosyncratic errors
     mul!(resid(model.error), model.G, resid(model))
@@ -377,10 +409,10 @@ function init_error!(model::SpatialErrorModel, init::NamedTuple)
 end
 function init_error!(model::SpatialMovingAverageModel, init::NamedTuple)
     # spatial dependence
-    haskey(init, :error) ? model.ρ.= init.error.ρ : zero(eltype(model.ρ))
+    model.ρ.= haskey(init, :error) ? init.error.ρ : zero(eltype(model.ρ))
 
     # spatial MA polynomial
-    spatial_polynomial!(model.G, model.ρ, model.W, model.groups)
+    spatial_ma_polynomial!(model.G, model.ρ, model.W, model.groups)
 
     # factorization
     fac= lu(model.G)
@@ -424,7 +456,7 @@ function f_spatial( ρ::AbstractVector,
     # transform parameters back
     ρ.= logistic.(ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
     # Spatial lag polynomial G
-    spatial_polynomial!(model.G, ρ, model.W, model.groups)
+    spatial_ar_polynomial!(model.G, ρ, model.W, model.groups)
     # transform parameters
     ρ.= logit.(ρ; offset=model.ρ_max, scale=2 * model.ρ_max)    
 
@@ -453,11 +485,11 @@ function f_spatial( ρ::AbstractVector,
     (n,T)= size(resid(model))
 
     # transform parameters back
-    ρ.= logistic.(ρ)
+    ρ.= logistic.(ρ, offset=1., scale=2.)
     # Spatial lag polynomial G
-    spatial_polynomial!(model.G, ρ, model.W, model.groups)
+    spatial_ma_polynomial!(model.G, ρ, model.W, model.groups)
     # transform parameters
-    ρ.= logit.(ρ)    
+    ρ.= logit.(ρ, offset=1., scale=2.)    
 
     # error component
     e= resid(model) * transpose(resid(model)) .+ quad
@@ -470,7 +502,7 @@ function f_spatial( ρ::AbstractVector,
     # objective function 
     f= zero(eltype(ρ))
     @inbounds @fastmath for i in 1:n
-        f+= dot(view(prec(moodel),:,i), view(e,:,i))
+        f+= dot(view(prec(model),:,i), view(e,:,i))
     end
     # logabsdet
     d,s= logabsdet(lu!(model.G))
@@ -505,7 +537,7 @@ function ∇f_spatial!(   ∇f::AbstractVector,
     # transform parameters back
     ρ.= logistic.(ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
     # Spatial lag polynomial G
-    spatial_polynomial!(model.G, ρ, model.W, model.groups)
+    spatial_ar_polynomial!(model.G, ρ, model.W, model.groups)
     # transform parameters
     ρ.= logit.(ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
 
@@ -543,11 +575,11 @@ function ∇f_spatial!(   ∇f::AbstractVector,
     T= size(resid(model),2)
 
     # transform parameters back
-    ρ.= logistic.(ρ)
+    ρ.= logistic.(ρ, offset=1., scale=2.)
     # Spatial lag polynomial G
-    spatial_polynomial!(model.G, ρ, model.W, model.groups)
+    spatial_ma_polynomial!(model.G, ρ, model.W, model.groups)
     # transform parameters
-    ρ.= logit.(ρ)
+    ρ.= logit.(ρ, offset=1., scale=2.)
 
     # variance and precision
     tmp_nn= cov(model.error) * transpose(model.G)
@@ -571,7 +603,7 @@ function ∇f_spatial!(   ∇f::AbstractVector,
         for j in rng
             ∇f_i+= ∇logdet[j,j] - inv(T) * dot(view(e,:,j), view(prec(model),:,j))
         end
-        jacob= logistic(ρ[i]) * (one(ρ[i]) - logistic(ρ[i]))
+        jacob= 2 * logistic(ρ[i]) * (one(ρ[i]) - logistic(ρ[i]))
         ∇f[i]= ∇f_i * jacob
         idx+= model.groups[i]
     end
@@ -648,7 +680,7 @@ function update_error!(model::SpatialErrorModel, quad::AbstractMatrix, pen::Pena
     model.ρ.= logistic.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
 
     # Spatial lag polynomial G
-    spatial_polynomial!(model.G, model.ρ, model.W, model.groups)
+    spatial_ar_polynomial!(model.G, model.ρ, model.W, model.groups)
 
     # variance and precision
     prec(model).data.= transpose(model.G) * prec(model.error) * model.G
@@ -672,23 +704,23 @@ function update_error!(model::SpatialMovingAverageModel, quad::AbstractMatrix, p
     ∇f!(∇f::AbstractVector, x::AbstractVector)=  ∇f_spatial!(∇f, x, model, quad)
 
     # Initial value for proximal operator
-    x0= logit.(model.ρ)
+    x0= logit.(model.ρ, offset=1., scale=2.)
 
     # Proximal operators
     prox_g!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
     prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, x0)
 
     # Transform parameters
-    model.ρ.= logit.(model.ρ)
+    model.ρ.= logit.(model.ρ, offset=1., scale=2.)
 
     # Penalized estimation via admm
     model.ρ.= admm!(model.ρ, prox_f!, prox_g!)
 
     # Transform parameters back
-    model.ρ.= logistic.(model.ρ)
+    model.ρ.= logistic.(model.ρ, offset=1., scale=2.)
 
     # Spatial lag polynomial G
-    spatial_polynomial!(model.G, model.ρ, model.W, model.groups)
+    spatial_ma_polynomial!(model.G, model.ρ, model.W, model.groups)
 
     # variance and precision
     cov(model).data.= model.G * cov(model.error) * transpose(model.G)
