@@ -9,7 +9,15 @@ ml.jl
 @date: 2022/03/14
 =#
 
-function f(ψ::AbstractVector, model::StateSpaceModel, filter::KalmanFilter, sys::StateSpaceSystem)
+"""
+
+"""
+function objective( ψ::AbstractVector, 
+                    model::StateSpaceModel, 
+                    filter::KalmanFilter, 
+                    sys::StateSpaceSystem,
+                    method::Symbol
+                    )
     # Get dims
     (n,T)= size(model.y) 
 
@@ -18,19 +26,19 @@ function f(ψ::AbstractVector, model::StateSpaceModel, filter::KalmanFilter, sys
 
     # Get system
     init_system!(sys, model)
-    get_system!(sys, model)
+    get_system!(sys, model, method)
 
     # Run Kalman filter
-    kalman_filter!(filter, model.y, sys)
+    kalman_filter!(filter, sys)
 
     # Average negative log-likelihood
-    ll= -inv(n * T) * loglik(filter)
+    ll= -inv(n * T) * loglik(filter, model, method)
 
     return ll
 end
 
 """
-    maximum_likelihood!(model; init=NamedTuple(), ϵ_abs=1e-7, ϵ_rel=1e-3, max_iter=1000)
+    maximum_likelihood!(model; init=NamedTuple(), method=:collapsed, ϵ_abs=1e-7, ϵ_rel=1e-4, max_iter=1000)
 
 Maximum Likelihood (ML) algorithm to estimate the hyper parameters of
 a linear Gaussian State Space model as defined by `model`, results are stored in
@@ -39,6 +47,7 @@ a linear Gaussian State Space model as defined by `model`, results are stored in
 #### Arguments
   - `model::StateSpaceModel`: state space model
   - `init::NamedTuple`      : initial model parameters
+  - `method::Symbol`        : filtering method
   - `ϵ_abs::Real`           : absolute tolerance
   - `ϵ_rel::Real`           : relative tolerance
   - `max_iter::Integer`     : max number of iterations
@@ -46,29 +55,48 @@ a linear Gaussian State Space model as defined by `model`, results are stored in
 #### Returns
   - `ll::Real`          : log-likelihood value      
 """
-function maximum_likelihood!(model::StateSpaceModel; 
-            init::NamedTuple=NamedTuple(), ϵ_abs::Real=1e-7, ϵ_rel::Real=1e-3, max_iter::Integer=1_000)            
+function maximum_likelihood!(   model::StateSpaceModel; 
+                                init::NamedTuple=NamedTuple(), 
+                                method::Symbol=:collapsed,
+                                ϵ_abs::Real=1e-7, 
+                                ϵ_rel::Real=1e-4, 
+                                max_iter::Integer=1_000
+                                )            
     # Initialize state space model and system
-    sys= init!(model, init)
+    sys= init!(model, init, method)
 
     # Get dims
-    (n,T)= size(model.y)
+    (n,T_len)= size(model.y)
     p= length(sys.a1)
     n_params= nparams(model)
 
     # Initialize parameters
     ψ0= similar(model.y, n_params)
-    get_parameters!(ψ0, model)
+    get_params!(ψ0, model)
     
-    # Initialize filter and smoother
-    filter= MultivariateFilter(similar(model.y, p, T), similar(model.y, p, p, T), 
-                            similar(model.y, n, T), similar(model.y, n, n, T), 
-                            similar(model.y, p, n, T))
+    # Initialize filter
+    T= eltype(model.y)  # type
+    if method === :univariate 
+        filter= UnivariateFilter(n, p, T_len, T)
+    elseif method === :collapsed
+        filter= UnivariateFilter(p, p, T_len, T)
+    elseif method === :multivariate
+        filter= MultivariateFilter(n, p, T_len, T)
+    elseif method === :woodbury
+        filter= WoodburyFilter(n, p, T_len, T)
+    else
+        throw(ArgumentError("Invalid method name $(method)"))
+    end
     
     # Closure of objective function
-    f_cl(x::AbstractVector)= f(x, model, filter, sys)
+    f(x::AbstractVector)= objective(x, model, filter, sys, method)
 
-    res= optimize(f_cl, ψ0, LBFGS())
+    # optimize
+    options= Optim.Options(g_tol=ϵ_abs, x_reltol=ϵ_rel, iterations=max_iter)
+    res= optimize(f, ψ0, LBFGS(), options)
+
+    # Store results
+    store_params!(model, Optim.minimizer(res))
    
-    return minimum(res)
+    return Optim.minimum(res)
 end
