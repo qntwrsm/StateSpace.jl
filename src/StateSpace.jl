@@ -18,7 +18,7 @@ using 	LinearAlgebra,
 		Statistics, 
 		Optim, 
 		ProximalMethods, 
-		FiniteDifferences,
+        FiniteDiff,
         MultivariateStats
 
 export 
