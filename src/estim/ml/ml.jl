@@ -113,10 +113,12 @@ function _maximum_likelihood!(  model::StateSpaceModel,
     cache= FiniteDiff.GradientCache(similar(ψ), similar(ψ))
     ∇f!(∇f::AbstractVector, x::AbstractVector)= FiniteDiff.finite_difference_gradient!(∇f, f, x, cache)
 
+    # Warm start for proximal operator
+    y_prev= copy(ψ)
+
     # Proximal operators
     prox_g!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
-    x0= copy(ψ)
-    prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, x0)
+    prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, y_prev)
 
     # optimize
     ψ.= admm!(ψ, prox_f!, prox_g!, ϵ_abs=ϵ_abs, ϵ_rel=ϵ_rel, max_iter=max_iter)

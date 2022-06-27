@@ -737,8 +737,8 @@ function update_error!(model::SpatialErrorModel, quad::AbstractMatrix, pen::Pena
     f(x::AbstractVector)= f_spatial(x, model, quad)
     ∇f!(∇f::AbstractVector, x::AbstractVector)=  ∇f_spatial!(∇f, x, model, quad)
 
-    # Initial value for proximal operator
-    x0= logit.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
+    # Warm start for proximal operator
+    y_prev= logit.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
 
     # Proximal operators
     prox_g!(x::AbstractVector, λ::Real)=    begin
@@ -746,7 +746,7 @@ function update_error!(model::SpatialErrorModel, quad::AbstractMatrix, pen::Pena
                                                 prox!(x, λ, pen)
                                                 x.= logit.(x, offset=model.ρ_max, scale=2 * model.ρ_max)
                                             end
-    prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, x0)
+    prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, y_prev)
 
     # Transform parameters
     model.ρ.= logit.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
@@ -781,8 +781,8 @@ function update_error!(model::SpatialMovingAverageModel, quad::AbstractMatrix, p
     f(x::AbstractVector)= f_spatial(x, model, quad)
     ∇f!(∇f::AbstractVector, x::AbstractVector)=  ∇f_spatial!(∇f, x, model, quad)
 
-    # Initial value for proximal operator
-    x0= logit.(model.ρ, offset=1., scale=2.)
+    # Warm start for proximal operator
+    y_prev= logit.(model.ρ, offset=1., scale=2.)
 
     # Proximal operators
     prox_g!(x::AbstractVector, λ::Real)=    begin
@@ -790,7 +790,7 @@ function update_error!(model::SpatialMovingAverageModel, quad::AbstractMatrix, p
                                                 prox!(x, λ, pen)
                                                 x.= logit.(x, offset=1., scale=2.)
                                             end
-    prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, x0)
+    prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, y_prev)
 
     # Transform parameters
     model.ρ.= logit.(model.ρ, offset=1., scale=2.)
