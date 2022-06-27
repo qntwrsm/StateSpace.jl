@@ -234,13 +234,18 @@ storing the result in `ϕ`.
 """
 function init_ϕ!(ϕ::Diagonal, pc::AbstractMatrix)
     # Get dims
-    (r,T)= size(pc)
+    (r,T_len)= size(pc)
+    # type
+    T= eltype(pc)
 
     # OLS
     @inbounds @fastmath for i in 1:r
-        y= view(pc,i,2:T)
-        x= view(pc,i,1:T-1)
-        ϕ.diag[i]= dot(x, y) * inv(sum(abs2, x))
+        y= view(pc,i,2:T_len)
+        x= view(pc,i,1:T_len-1)
+        ϕ_i= dot(x, y) * inv(sum(abs2, x))
+
+        # threshold
+        ϕ.diag[i]= .99 * sign(ϕ_i) * min(abs(ϕ_i), one(T))
     end
 
     return nothing
