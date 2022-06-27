@@ -404,6 +404,61 @@ end
 
 # EM
 """
+    f_ϕ(ϕ, A, B)
+
+Compute objective function value `f` w.r.t. autoregressive parameter ``ϕ``
+(negative log-likelihood w.r.t. ``ϕ``).
+
+#### Arguments
+  - `ϕ::AbstractVector` : autoreggresive parameters
+  - `A::AbstractMatrix` : linear coefficients
+  - `B::AbstractMatrix` : quadratic coefficients
+
+#### Returns
+  - `f::Real`   : objective function value
+"""
+function f_ϕ(ϕ::AbstractVector, A::AbstractMatrix, B::AbstractMatrix)
+    # type
+    T= eltype(ϕ)
+
+    # objective function
+    f= zero(eltype(ϕ))
+    @inbounds @fastmath for i in axes(ϕ,1)
+        ϕ_i= logistic(ϕ[i], offset=one(T), scale=2 * one(T))
+        f+= .5 * ϕ_i^2 * B[i,i] - ϕ_i * A[i,i]
+    end
+
+    return f
+end
+
+"""
+    ∇f_ϕ!(∇f, ϕ, A, B)
+
+Compute gradient `∇f` of objective function value `f` w.r.t. autoregressive
+parameter ``ϕ`` (gradient of negative log-likelihood w.r.t. ``ϕ``).
+
+#### Arguments
+  - `ϕ::AbstractVector` : autoreggresive parameters
+  - `A::AbstractMatrix` : linear coefficients
+  - `B::AbstractMatrix` : quadratic coefficients
+
+#### Returns
+  - `∇f::AbstractVector`: gradient
+"""
+function ∇f_ϕ!(∇f::AbstractVector, ϕ::AbstractVector, A::AbstractMatrix, B::AbstractMatrix)
+    # type
+    T= eltype(ϕ)
+
+    @inbounds @fastmath for i in axes(ϕ,1)
+        ϕ_i= logistic(ϕ[i], offset=one(T), scale=2 * one(T))
+        jacob= 2 * logistic(ϕ[i]) * (one(T) - logistic(ϕ[i]))
+        ∇f[i]= (ϕ_i * B[i,i] - A[i,i]) * jacob
+    end
+
+    return nothing
+end
+
+"""
     update_ϕ!(model, state)
 
 Update autoregressive parameters `ϕ`, storing the result in `model`.
@@ -413,9 +468,28 @@ Update autoregressive parameters `ϕ`, storing the result in `model`.
   - `state:::EMOptimizerState`  : state variables
 """
 function update_ϕ!(model::DynamicFactorModel, state::EMOptimizerState)
-    @inbounds @fastmath for i in axes(model.ϕ,1)
-        model.ϕ.diag[i]= state.V_01[i,i] * inv(state.V_1[i,i])
-    end
+    # dims
+    T_len= size(model.y,2)
+    # type
+    T= eltype(model.ϕ)
+
+    # closure of objective function and gradient
+    f(x::AbstractVector)= f_ϕ(x, state.V_01, state.V_1) * inv(T_len)
+    ∇f!(∇f::AbstractVector, x::AbstractVector)= begin 
+                                                    ∇f_ϕ!(∇f, x, state.V_01, state.V_1)
+                                                    ldiv!(inv(T_len), ∇f)
+                                                end
+    
+    # Transform parameters
+    model.ϕ.diag.= logit.(model.ϕ.diag, offset=one(T), scale=2 * one(T))
+
+    
+    # optimize
+    options= Optim.Options(g_tol=1e-7, x_reltol=1e-4)
+    res= optimize(f, ∇f!, model.ϕ.diag, LBFGS(), options)
+
+    # store result
+    model.ϕ.diag.= logistic.(Optim.minimizer(res), offset=one(T), scale=2 * one(T))
 
     return nothing
 end
