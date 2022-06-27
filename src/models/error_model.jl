@@ -741,7 +741,11 @@ function update_error!(model::SpatialErrorModel, quad::AbstractMatrix, pen::Pena
     x0= logit.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
 
     # Proximal operators
-    prox_g!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
+    prox_g!(x::AbstractVector, λ::Real)=    begin
+                                                x.= logistic.(x, offset=model.ρ_max, scale=2 * model.ρ_max)    
+                                                prox!(x, λ, pen)
+                                                x.= logit.(x, offset=model.ρ_max, scale=2 * model.ρ_max)
+                                            end
     prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, x0)
 
     # Transform parameters
@@ -781,7 +785,11 @@ function update_error!(model::SpatialMovingAverageModel, quad::AbstractMatrix, p
     x0= logit.(model.ρ, offset=1., scale=2.)
 
     # Proximal operators
-    prox_g!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
+    prox_g!(x::AbstractVector, λ::Real)=    begin
+                                                x.= logistic.(x, offset=1., scale=2.)    
+                                                prox!(x, λ, pen)
+                                                x.= logit.(x, offset=1., scale=2.)
+                                            end
     prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, x0)
 
     # Transform parameters
