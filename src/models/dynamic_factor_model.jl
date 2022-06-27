@@ -62,7 +62,7 @@ function get_params!(ψ::AbstractVector, model::DynamicFactorModel)
     idx+= n*r
 
     # ϕ
-    ψ[idx+1:idx+r].= model.ϕ.diag
+    ψ[idx+1:idx+r].= logit.(model.ϕ.diag, offset=1., scale=2)
     idx+= r
 
     # mean model
@@ -191,7 +191,7 @@ function store_params!(model::DynamicFactorModel, ψ::AbstractVector)
     idx+= n*r
 
     # ϕ
-    model.ϕ.diag.= view(ψ,idx+1:idx+r)
+    model.ϕ.diag.= logistic.(view(ψ,idx+1:idx+r), offset=1., scale=2)
     idx+= r
 
     # mean model

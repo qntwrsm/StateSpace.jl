@@ -146,7 +146,7 @@ nparams(model::Idiosyncratic)= length(model.Σ) * (length(model.Σ) + 1) ÷ 2
 nparams(model::SpatialErrorModel)= length(model.ρ) + nparams(model.error)
 nparams(model::SpatialMovingAverageModel)= length(model.ρ) + nparams(model.error)
 
-get_params!(ψ::AbstractVector, model::Independent)= ψ.= model.σ
+get_params!(ψ::AbstractVector, model::Independent)= ψ.= log.(model.σ)
 function get_params!(ψ::AbstractVector, model::Idiosyncratic)
     k= 0
     @inbounds @fastmath for j in axes(model.Σ,2)
@@ -160,7 +160,7 @@ function get_params!(ψ::AbstractVector, model::Idiosyncratic)
 end
 function get_params!(ψ::AbstractVector, model::SpatialErrorModel)
     get_params!(view(ψ,1:nparams(model.error)), model.error)
-    ψ[nparams(model.error)+1:end].= model.ρ
+    ψ[nparams(model.error)+1:end].= logit.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
 
     return nothing
 end
@@ -171,7 +171,7 @@ function get_params!(ψ::AbstractVector, model::SpatialMovingAverageModel)
     return nothing
 end
 
-store_params!(model::Independent, ψ::AbstractVector)= model.σ.= ψ
+store_params!(model::Independent, ψ::AbstractVector)= model.σ.= exp.(ψ)
 function store_params!(model::Idiosyncratic, ψ::AbstractVector)
     k= 0
     @inbounds @fastmath for j in axes(model.Σ,2)
@@ -186,7 +186,7 @@ end
 function store_params!(model::SpatialErrorModel, ψ::AbstractVector)
     n= length(ψ)
     store_params!(model.error, view(ψ,1:nparams(model.error)))
-    model.ρ.= view(ψ,nparams(model.error)+1:n)
+    model.ρ.= logistic.(view(ψ,nparams(model.error)+1:n); offset=model.ρ_max, scale=2 * model.ρ_max)
 
     return nothing
 end
@@ -220,6 +220,37 @@ cov(model::AbstractErrorModel)= model.Σ
 cov(model::Independent)= Diagonal(model.σ)
 
 """
+    cov!(model)
+
+Calculate and update covariance matrix of error model
+
+#### Arguments
+  - `model::AbstractErrorModel` : error model
+"""
+cov!(model::AbstractErrorModel)= nothing
+function cov!(model::SpatialErrorModel)
+    # spatial AR polynomial
+    spatial_ar_polynomial!(model.G, model.ρ, model.W, model.groups)
+
+    # inverse of G
+    Ginv= inv(model.G)
+
+    # update covariance
+    cov(model).data.= Ginv * cov(model.error) * transpose(Ginv)
+
+    return nothing
+end
+function cov!(model::SpatialMovingAverageModel)
+    # spatial MA polynomial
+    spatial_ma_polynomial!(model.G, model.ρ, model.W, model.groups)
+
+    # update covariance
+    cov(model).data.= model.G * cov(model.error) * transpose(model.G)
+
+    return nothing
+end
+
+"""
     prec(model)
 
 Retrieve precision matrix of error model
@@ -229,6 +260,49 @@ Retrieve precision matrix of error model
 """
 prec(model::AbstractErrorModel)= model.Ω
 prec(model::Independent)= Diagonal(model.ω)
+
+"""
+    prec!(model)
+
+Calculate and update precision matrix of error model
+
+#### Arguments
+  - `model::AbstractErrorModel` : error model
+"""
+prec!(model::Independent)= model.ω.= inv.(model.σ)
+function prec!(model::Idiosyncratic)
+    prec(model).= cov(model)
+    LinearAlgebra.inv!(cholesky!(prec(model)))
+
+    return nothing
+end
+function prec!(model::SpatialErrorModel)
+    # spatial AR polynomial
+    spatial_ar_polynomial!(model.G, model.ρ, model.W, model.groups)
+
+    # update precision of underlying error structure
+    prec!(model.error)
+
+    # update covariance
+    prec(model).data.= transpose(model.G) * prec(model.error) * model.G
+
+    return nothing
+end
+function prec!(model::SpatialMovingAverageModel)
+    # spatial MA polynomial
+    spatial_ma_polynomial!(model.G, model.ρ, model.W, model.groups)
+
+    # inverse of G
+    Ginv= inv(model.G)
+
+    # update precision of underlying error structure
+    prec!(model.error)
+
+    # update covariance
+    prec(model).data.= transpose(Ginv) * prec(model.error) * Ginv
+
+    return nothing
+end
 
 """
     spatial(model)
@@ -458,7 +532,7 @@ function f_spatial( ρ::AbstractVector,
     # Spatial lag polynomial G
     spatial_ar_polynomial!(model.G, ρ, model.W, model.groups)
     # transform parameters
-    ρ.= logit.(ρ; offset=model.ρ_max, scale=2 * model.ρ_max)    
+    ρ.= logit.(ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
 
     # error component
     e= resid(model) * transpose(resid(model)) .+ quad
