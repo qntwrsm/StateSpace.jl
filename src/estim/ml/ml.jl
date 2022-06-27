@@ -38,6 +38,11 @@ function objective( ψ::AbstractVector,
     # Store parameters
     store_params!(model, ψ)
 
+    # update mean, covariance, and precision
+    mean!(model)
+    cov!(model)
+    prec!(model)
+
     # Get system
     init_system!(sys, model)
     get_system!(sys, model, method)
@@ -86,8 +91,8 @@ function _maximum_likelihood!(  model::StateSpaceModel,
     n_params= nparams(model)
 
     # Initialize parameters
-    ψ0= similar(model.y, n_params)
-    get_params!(ψ0, model)
+    ψ= similar(model.y, n_params)
+    get_params!(ψ, model)
     
     # Initialize filter
     T= eltype(model.y)  # type
@@ -103,17 +108,23 @@ function _maximum_likelihood!(  model::StateSpaceModel,
         throw(ArgumentError("Invalid method name $(method)"))
     end
     
-    # Closure of objective function
+    # Closure of objective function and gradient
     f(x::AbstractVector)= objective(x, model, filter, sys, method)
+    cache= FiniteDiff.GradientCache(similar(ψ), similar(ψ))
+    ∇f!(∇f::AbstractVector, x::AbstractVector)= FiniteDiff.finite_difference_gradient!(∇f, f, x, cache)
+
+    # Proximal operators
+    prox_g!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
+    x0= copy(ψ)
+    prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, x0)
 
     # optimize
-    options= Optim.Options(g_tol=ϵ_abs, x_reltol=ϵ_rel, iterations=max_iter)
-    res= optimize(f, ψ0, LBFGS(), options)
+    ψ.= admm!(ψ, prox_f!, prox_g!, ϵ_abs=ϵ_abs, ϵ_rel=ϵ_rel, max_iter=max_iter)
 
     # Store results
-    store_params!(model, Optim.minimizer(res))
+    store_params!(model, ψ)
    
-    return Optim.minimum(res)
+    return -(n * T_len) * f(ψ)
 end
 
 function _maximum_likelihood!(  model::StateSpaceModel,
@@ -152,10 +163,12 @@ function _maximum_likelihood!(  model::StateSpaceModel,
     
     # Closure of objective function
     f(x::AbstractVector)= objective(x, model, filter, sys, method)
+    cache= FiniteDiff.GradientCache(similar(ψ0), similar(ψ0))
+    ∇f!(∇f::AbstractVector, x::AbstractVector)= FiniteDiff.finite_difference_gradient!(∇f, f, x, cache)
 
     # optimize
     options= Optim.Options(g_tol=ϵ_abs, x_reltol=ϵ_rel, iterations=max_iter)
-    res= optimize(f, ψ0, LBFGS(), options)
+    res= optimize(f, ∇f!, ψ0, LBFGS(), options)
 
     # Store results
     store_params!(model, Optim.minimizer(res))
