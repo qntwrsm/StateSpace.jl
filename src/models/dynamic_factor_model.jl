@@ -37,8 +37,11 @@ end
 
 # Methods
 mean(model::DynamicFactorModel)= mean(model.mean)
+mean!(model::DynamicFactorModel)= mean!(model.mean)
 cov(model::DynamicFactorModel)= cov(model.error)
+cov!(model::DynamicFactorModel)= cov!(model.error)
 prec(model::DynamicFactorModel)= prec(model.error)
+prec!(model::DynamicFactorModel)= prec!(model.error)
 resid(model::DynamicFactorModel)= resid(model.error)
 
 # State space system and hyperparameters

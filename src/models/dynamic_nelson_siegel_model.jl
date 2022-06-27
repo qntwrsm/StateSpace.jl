@@ -34,7 +34,9 @@ end
 
 # Methods
 cov(model::DynamicNelsonSiegelModel)= cov(model.error_obs)
+cov!(model::DynamicNelsonSiegelModel)= cov!(model.error_obs)
 prec(model::DynamicNelsonSiegelModel)= prec(model.error_obs)
+prec!(model::DynamicNelsonSiegelModel)= prec!(model.error_obs)
 resid(model::DynamicNelsonSiegelModel)= resid(model.error_obs)
 maturities(model::DynamicNelsonSiegelModel)= model.τ
 decay(model::DynamicNelsonSiegelModel)= model.λ
