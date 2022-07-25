@@ -482,7 +482,7 @@ function update_ϕ!(model::DynamicFactorModel, state::EMOptimizerState)
     f(x::AbstractVector)= f_ϕ(x, state.V_01, state.V_1) * inv(T_len)
     ∇f!(∇f::AbstractVector, x::AbstractVector)= begin 
                                                     ∇f_ϕ!(∇f, x, state.V_01, state.V_1)
-                                                    ldiv!(inv(T_len), ∇f)
+                                                    ldiv!(T_len, ∇f)
                                                 end
     
     # Transform parameters
