@@ -137,7 +137,12 @@ Update mean model hyper parameters, storing the results in `model`.
   - `pen::Penalization`         : penalization variables
 """
 update_mean!(model::NoConstant, init_resid!::Function, error::AbstractErrorModel, pen::Penalization)= nothing
-function update_mean!(model::Exogeneous, init_resid!::Function, error::AbstractErrorModel, pen::Penalization)
+function update_mean!(
+    model::Exogeneous, 
+    init_resid!::Function, 
+    error::AbstractErrorModel,
+    pen::Penalization
+)
     # residuals
     init_resid!(resid(error))
     # precision matrix
@@ -147,7 +152,7 @@ function update_mean!(model::Exogeneous, init_resid!::Function, error::AbstractE
     b= -inv(prod(size(model.μ))) * vec(Ω * resid(error) * transpose(model.X))
     # I + A, with A quadratic coefficient
     tmp= inv(prod(size(model.μ))) * kron(model.X * transpose(model.X), Ω)
-    @inbounds @fastmath for i in axes(tmp,1)
+    @inbounds @fastmath for i ∈ axes(tmp,1)
         tmp[i,i]+= one(eltype(tmp))
     end
     # Cholesky decomposition
@@ -165,7 +170,12 @@ function update_mean!(model::Exogeneous, init_resid!::Function, error::AbstractE
 
     return nothing
 end
-function update_mean!(model::Exogeneous, init_resid!::Function, error::AbstractErrorModel, pen::NoPen)
+function update_mean!(
+    model::Exogeneous, 
+    init_resid!::Function, 
+    error::AbstractErrorModel, 
+    pen::NoPen
+)
     # update residuals
     ε= resid(error) # retrieve residuals
     init_resid!(ε)
@@ -211,7 +221,7 @@ function forecast!(model::Exogeneous, h::Integer)
     rdiv!(ϕ, C)
 
     # forecasts
-    for i in 1:h
+    for i = 1:h
         x= view(model.X,:,T+i-1)
         x_h= view(model.X,:,T+i)
         μ_h= view(model.μ,:,T+i)

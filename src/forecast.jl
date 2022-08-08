@@ -53,7 +53,7 @@ function forecast(sys::LinearTimeInvariant, h::Integer)
 
     # forecasts
     f= Forecast(n, p, h, T)
-    @inbounds @fastmath for i in 1:h
+    @inbounds @fastmath for i = 1:h
         # Store filter forecast output
         f.F_hat[:,:,i]= view(filter.F,:,:,T_len-h+i)
         f.a_hat[:,i]= view(filter.a,:,T_len-h+i)
@@ -83,7 +83,7 @@ function forecast(sys::LinearTimeVariant, h::Integer)
 
     # forecasts
     f= Forecast(n, p, h, T)
-    @inbounds @fastmath for i in 1:h
+    @inbounds @fastmath for i = 1:h
         # Store filter forecast output
         f.F_hat[:,:,i]= view(filter.F,:,:,T_len-h+i)
         f.a_hat[:,i]= view(filter.a,:,T_len-h+i)

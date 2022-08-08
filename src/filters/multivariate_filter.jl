@@ -78,8 +78,13 @@ Compute forecast error ``v`` at time ``t``, storing the result in `v_t`.
 #### Returns
   - `v_t::AbstractVector`	: forecast error (n x 1)
 """
-function error!(v_t::AbstractVector, y::AbstractVector, Z::AbstractMatrix, 
-				a_t::AbstractVector, d::AbstractVector)
+function error!(
+    v_t::AbstractVector, 
+    y::AbstractVector, 
+    Z::AbstractMatrix, 
+	a_t::AbstractVector, 
+    d::AbstractVector
+)
 	# yₜ - d
 	v_t.= y .- d
     # vₜ = yₜ - Z×aₜ - d
@@ -103,8 +108,13 @@ Compute forecast error variance ``F`` at time ``t``, storing the result in
 #### Returns
   - `F_t::AbstractMatrix`	: forecast error variance (n x n)
 """
-function error_var!(F_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatrix, 
-					H::AbstractMatrix, tmp::AbstractMatrix)
+function error_var!(
+    F_t::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    Z::AbstractMatrix, 
+	H::AbstractMatrix, 
+    tmp::AbstractMatrix
+)
     # PₜｘZ'
 	mul!(tmp, P_t, transpose(Z))
     # ZｘPₜｘZ'
@@ -115,14 +125,19 @@ function error_var!(F_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatrix,
 	return nothing
 end
 
-function error_var!(F_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatrix, 
-					H::Diagonal, tmp::AbstractMatrix)	
+function error_var!(
+    F_t::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    Z::AbstractMatrix, 
+	H::Diagonal, 
+    tmp::AbstractMatrix
+)	
     # PₜｘZ'
 	mul!(tmp, P_t, transpose(Z))
     # ZｘPₜｘZ'
 	mul!(F_t, Z, tmp)
 	# Fₜ = ZｘPₜｘZ' + H
-	@inbounds @fastmath for i in axes(H,1) 
+	@inbounds @fastmath for i ∈ axes(H,1) 
 		F_t[i,i]+= H.diag[i]
 	end
 	
@@ -146,9 +161,15 @@ identity, storing the result in `Fi_t`.
 #### Returns
   - `Fi_t::AbstractMatrix`	: forecast error precision (n x n)
 """
-function error_prec!(Fi_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatrix, 
-					Hi::AbstractMatrix, tmp_np::AbstractMatrix, tmp_pn::AbstractMatrix, 
-					tmp_p::AbstractMatrix)
+function error_prec!(
+    Fi_t::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    Z::AbstractMatrix, 
+	Hi::AbstractMatrix, 
+    tmp_np::AbstractMatrix, 
+    tmp_pn::AbstractMatrix, 
+	tmp_p::AbstractMatrix
+)
 	# Pₜ⁻¹
 	copyto!(tmp_p, P_t)
 	LinearAlgebra.inv!(cholesky!(Hermitian(tmp_p)))
@@ -168,9 +189,15 @@ function error_prec!(Fi_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatri
 	return nothing
 end
 
-function error_prec!(Fi_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatrix, 
-					Hi::Diagonal, tmp_np::AbstractMatrix, tmp_pn::AbstractMatrix, 
-					tmp_p::AbstractMatrix)
+function error_prec!(
+    Fi_t::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    Z::AbstractMatrix, 
+	Hi::Diagonal, 
+    tmp_np::AbstractMatrix, 
+    tmp_pn::AbstractMatrix, 
+	tmp_p::AbstractMatrix
+)
 	# Pₜ⁻¹
 	copyto!(tmp_p, P_t)
 	C= cholesky!(Hermitian(tmp_p))		# pointer(C.factors) = pointer(tmp_p)
@@ -187,7 +214,7 @@ function error_prec!(Fi_t::AbstractMatrix, P_t::AbstractMatrix, Z::AbstractMatri
 	# -H⁻¹×Z×(Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹×Z'×H⁻¹
 	mul!(Fi_t, tmp_np, tmp_pn, -1., .0)
 	# Fₜ⁻¹ = H⁻¹ - H⁻¹×Z×(Pₜ⁻¹ + Z'×H⁻¹×Z)⁻¹×Z'×H⁻¹
-	@inbounds @fastmath for i in axes(Hi,1)
+	@inbounds @fastmath for i ∈ axes(Hi,1)
 		Fi_t[i,i]+= Hi.diag[i]
 	end
 	
@@ -210,8 +237,14 @@ the result in `K_t`.
 #### Returns
   - `K_t::AbstractMatrix`	: Kalman gain (p x n)
 """
-function gain!(K_t::AbstractMatrix, P_t::AbstractMatrix, Fi_t::AbstractMatrix, 
-				Z::AbstractMatrix, T::AbstractMatrix, tmp::AbstractMatrix)
+function gain!(
+    K_t::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    Fi_t::AbstractMatrix, 
+    Z::AbstractMatrix, 
+    T::AbstractMatrix, 
+    tmp::AbstractMatrix
+)
     # PₜｘZ'
 	mul!(K_t, P_t, transpose(Z))
     # PₜｘZ'ｘFₜ⁻¹
@@ -228,8 +261,14 @@ end
 Compute Kalman gain ``K`` at time ``t`` using the factorization of ``F``, storing
 the result in `K_t`.
 """
-function gain!(K_t::AbstractMatrix, P_t::AbstractMatrix, fac::Factorization, 
-				Z::AbstractMatrix, T::AbstractMatrix, tmp::AbstractMatrix)
+function gain!(
+    K_t::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    fac::Factorization, 
+	Z::AbstractMatrix, 
+    T::AbstractMatrix, 
+    tmp::AbstractMatrix
+)
     # PₜｘZ'
 	mul!(tmp, P_t, transpose(Z))
     # PₜｘZ'ｘFₜ⁻¹
@@ -255,8 +294,14 @@ Predict states ``a`` at time ``t+1``, storing the result in `a_p`.
 #### Returns
   - `a_p::AbstractVector`	: predicted state at time ``t+1`` (p x 1)
 """
-function predict_state!(a_p::AbstractVector, a_t::AbstractVector, K_t::AbstractMatrix, 
-						v_t::AbstractVector, T::AbstractMatrix, c::AbstractVector)
+function predict_state!(
+    a_p::AbstractVector, 
+    a_t::AbstractVector, 
+    K_t::AbstractMatrix, 
+	v_t::AbstractVector, 
+    T::AbstractMatrix, 
+    c::AbstractVector
+)
     # Kₜｘvₜ
     mul!(a_p, K_t, v_t)
     # aₜ₊₁ = Tｘaₜ + Kₜｘvₜ
@@ -283,9 +328,15 @@ Predict states variance ``P`` at time ``t+1``, storing the result in `P_p`.
 #### Returns
   - `P_p::AbstractMatrix`	: predicted states variance at time ``t+1`` (p x p)
 """
-function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::AbstractMatrix, 
-						Z::AbstractMatrix, T::AbstractMatrix, Q::AbstractMatrix, 
-						tmp::AbstractMatrix)
+function predict_state_var!(
+    P_p::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    K_t::AbstractMatrix, 
+	Z::AbstractMatrix, 
+    T::AbstractMatrix, 
+    Q::AbstractMatrix, 
+	tmp::AbstractMatrix
+)
     # -KₜｘZ
 	mul!(P_p, K_t, Z, -1., .0)
 	# T - KₜｘZ
@@ -300,13 +351,19 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 	return nothing
 end
 
-function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::AbstractMatrix, 
-						Z::AbstractMatrix, T::Diagonal, Q::AbstractMatrix, 
-						tmp::AbstractMatrix)
+function predict_state_var!(
+    P_p::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    K_t::AbstractMatrix, 
+	Z::AbstractMatrix, 
+    T::Diagonal, 
+    Q::AbstractMatrix, 
+	tmp::AbstractMatrix
+)
     # -KₜｘZ
 	mul!(P_p, K_t, Z, -1., .0)
 	# T - KₜｘZ
-	@inbounds @fastmath for i in axes(T,1)
+	@inbounds @fastmath for i ∈ axes(T,1)
 		P_p[i,i]+= T.diag[i]
 	end
     # Pₜｘ(T - KₜｘZ)'
@@ -319,9 +376,15 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 	return nothing
 end
 
-function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::AbstractMatrix, 
-						Z::AbstractMatrix, T::AbstractMatrix, Q::Diagonal, 
-						tmp::AbstractMatrix)
+function predict_state_var!(
+    P_p::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    K_t::AbstractMatrix, 
+	Z::AbstractMatrix, 
+    T::AbstractMatrix, 
+    Q::Diagonal, 
+	tmp::AbstractMatrix
+)
     # -KₜｘZ
 	mul!(P_p, K_t, Z, -1., .0)
 	# T - KₜｘZ
@@ -331,20 +394,26 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 	# TｘPₜｘ(T - KₜｘZ)'
 	mul!(P_p, T, tmp)
 	# TｘPₜｘ(T - KₜｘZ)' + Q
-	@inbounds @fastmath for i in axes(Q,1)
+	@inbounds @fastmath for i ∈ axes(Q,1)
 		P_p[i,i]+= Q.diag[i]
 	end
 	
 	return nothing
 end
 
-function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::AbstractMatrix, 
-						Z::AbstractMatrix, T::Diagonal, Q::Diagonal, 
-						tmp::AbstractMatrix)
+function predict_state_var!(
+    P_p::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    K_t::AbstractMatrix, 
+	Z::AbstractMatrix, 
+    T::Diagonal, 
+    Q::Diagonal, 
+	tmp::AbstractMatrix
+)
     # -KₜｘZ
 	mul!(P_p, K_t, Z, -1., .0)
 	# T - KₜｘZ
-	@inbounds @fastmath for i in axes(T,1)
+	@inbounds @fastmath for i ∈ axes(T,1)
 		P_p[i,i]+= T.diag[i]
 	end
     # Pₜｘ(T - KₜｘZ)'
@@ -352,7 +421,7 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, K_t::Abstr
 	# TｘPₜｘ(T - KₜｘZ)'
 	mul!(P_p, T, tmp)
 	# TｘPₜｘ(T - KₜｘZ)' + Q
-	@inbounds @fastmath for i in axes(Q,1)
+	@inbounds @fastmath for i ∈ axes(Q,1)
 		P_p[i,i]+= Q.diag[i]
 	end
 	
@@ -374,9 +443,13 @@ Predict states variance ``P`` at time ``t+1`` when observation ``y`` at time
 #### Returns
   - `P_p::AbstractMatrix`	: predicted states variance at time ``t+1`` (p x p)
 """
-function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, 
-                            T::AbstractMatrix, Q::AbstractMatrix, 
-						    tmp::AbstractMatrix)
+function predict_state_var!(
+    P_p::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    T::AbstractMatrix, 
+    Q::AbstractMatrix, 
+	tmp::AbstractMatrix
+)
     # PₜｘT'
     mul!(tmp, P_t, transpose(T))
 	# TｘPₜｘT'
@@ -387,34 +460,49 @@ function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix,
 	return nothing
 end
 
-function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, T::Diagonal, 
-                            Q::AbstractMatrix, tmp::AbstractMatrix)
+function predict_state_var!(
+    P_p::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    T::Diagonal, 
+    Q::AbstractMatrix, 
+    tmp::AbstractMatrix
+)
 	# TｘPₜｘT' + Q
 	P_p.= T.diag .* P_t .* transpose(T.diag) .+ Q
 	
 	return nothing
 end
 
-function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, 
-                            T::AbstractMatrix, Q::Diagonal, tmp::AbstractMatrix)
+function predict_state_var!(
+    P_p::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    T::AbstractMatrix, 
+    Q::Diagonal, 
+    tmp::AbstractMatrix
+)
     # PₜｘT'
     mul!(tmp, P_t, transpose(T))
 	# TｘPₜｘT'
 	mul!(P_p, T, tmp)
 	# TｘPₜｘT' + Q
-	@inbounds @fastmath for i in axes(Q,1)
+	@inbounds @fastmath for i ∈ axes(Q,1)
 		P_p[i,i]+= Q.diag[i]
 	end
 	
 	return nothing
 end
 
-function predict_state_var!(P_p::AbstractMatrix, P_t::AbstractMatrix, T::Diagonal, 
-                            Q::Diagonal, tmp::AbstractMatrix)
+function predict_state_var!(
+    P_p::AbstractMatrix, 
+    P_t::AbstractMatrix, 
+    T::Diagonal, 
+    Q::Diagonal, 
+    tmp::AbstractMatrix
+)
     # TｘPₜｘT'
 	P_p.= T.diag .* P_t .* transpose(T.diag)
     # TｘPₜｘT' + Q
-    @inbounds @fastmath for i in axes(Q,1)
+    @inbounds @fastmath for i ∈ axes(Q,1)
 		P_p[i,i]+= Q.diag[i]
 	end
 	
@@ -440,12 +528,18 @@ Update Kalman filter components at time `t`, storing the results in `filter`.
 #### Returns
   - `filter::KalmanFilter`  : Kalman filter components
 """
-function update_filter!(filter::MultivariateFilter, 
-                        y::AbstractVector, 
-                        Z::AbstractMatrix, T::AbstractMatrix, 
-                        d::AbstractVector, c::AbstractVector, 
-                        H::AbstractMatrix, Q::AbstractMatrix, 
-                        t::Integer, T_len::Integer)
+function update_filter!(
+    filter::MultivariateFilter, 
+    y::AbstractVector, 
+    Z::AbstractMatrix, 
+    T::AbstractMatrix, 
+    d::AbstractVector, 
+    c::AbstractVector, 
+    H::AbstractMatrix, 
+    Q::AbstractMatrix, 
+    t::Integer, 
+    T_len::Integer
+)
     # Store views 
     a= view(filter.a,:,t)
     P= view(filter.P,:,:,t)
@@ -481,12 +575,18 @@ function update_filter!(filter::MultivariateFilter,
     return nothing
 end
 
-function update_filter!(filter::WoodburyFilter, 
-                        y::AbstractVector, 
-                        Z::AbstractMatrix, T::AbstractMatrix, 
-                        d::AbstractVector, c::AbstractVector, 
-                        Hi::AbstractMatrix, Q::AbstractMatrix, 
-                        t::Integer, T_len::Integer)
+function update_filter!(
+    filter::WoodburyFilter, 
+    y::AbstractVector, 
+    Z::AbstractMatrix, 
+    T::AbstractMatrix, 
+    d::AbstractVector, 
+    c::AbstractVector, 
+    Hi::AbstractMatrix, 
+    Q::AbstractMatrix, 
+    t::Integer, 
+    T_len::Integer
+)
     # Store views 
     a= view(filter.a,:,t)
     P= view(filter.P,:,:,t)
@@ -536,11 +636,16 @@ i.e. NaN, storing the results in `filter`.
 #### Returns
   - `filter::KalmanFilter`  : Kalman filter components
 """
-function update_filter!(filter::MultivariateFilter, 
-                        Z::AbstractMatrix, T::AbstractMatrix, 
-                        c::AbstractVector, 
-                        H::AbstractMatrix, Q::AbstractMatrix, 
-                        t::Integer, T_len::Integer)
+function update_filter!(
+    filter::MultivariateFilter, 
+    Z::AbstractMatrix, 
+    T::AbstractMatrix, 
+    c::AbstractVector, 
+    H::AbstractMatrix, 
+    Q::AbstractMatrix, 
+    t::Integer, 
+    T_len::Integer
+)
     # Store views 
     a= view(filter.a,:,t)
     P= view(filter.P,:,:,t)
@@ -573,11 +678,16 @@ function update_filter!(filter::MultivariateFilter,
     return nothing
 end
 
-function update_filter!(filter::WoodburyFilter,
-                        Z::AbstractMatrix, T::AbstractMatrix, 
-                        c::AbstractVector, 
-                        Hi::AbstractMatrix, Q::AbstractMatrix, 
-                        t::Integer, T_len::Integer)
+function update_filter!(
+    filter::WoodburyFilter,
+    Z::AbstractMatrix, 
+    T::AbstractMatrix, 
+    c::AbstractVector, 
+    Hi::AbstractMatrix, 
+    Q::AbstractMatrix, 
+    t::Integer, 
+    T_len::Integer
+)
     # Store views 
     a= view(filter.a,:,t)
     P= view(filter.P,:,:,t)
@@ -633,7 +743,7 @@ function kalman_filter!(filter::MultivariateFilter, sys::LinearTimeInvariant)
 	filter.P[:,:,1]= sys.P1
 	
 	# Filter
-	@inbounds for t in 1:T_len
+	@inbounds for t = 1:T_len
         # data
         y_t= view(sys.y, :, t)
 
@@ -641,7 +751,18 @@ function kalman_filter!(filter::MultivariateFilter, sys::LinearTimeInvariant)
         if any(isnan, y_t)
             update_filter!(filter, sys.Z, sys.T, sys.c, sys.H, sys.Q, t, T_len)
         else
-            update_filter!(filter, y_t, sys.Z, sys.T, sys.d, sys.c, sys.H, sys.Q, t, T_len)
+            update_filter!(
+                filter, 
+                y_t, 
+                sys.Z, 
+                sys.T, 
+                sys.d, 
+                sys.c, 
+                sys.H, 
+                sys.Q, 
+                t, 
+                T_len
+            )
         end
 	end
 	
@@ -657,7 +778,7 @@ function kalman_filter!(filter::MultivariateFilter, sys::LinearTimeVariant)
 	filter.P[:,:,1]= sys.P1
 	
 	# Filter
-	@inbounds for t in 1:T_len
+	@inbounds for t = 1:T_len
         # data
         y_t= view(sys.y, :, t)
 
@@ -667,9 +788,29 @@ function kalman_filter!(filter::MultivariateFilter, sys::LinearTimeVariant)
 
         # update filter
         if any(isnan, y_t)
-            update_filter!(filter, sys.Z[t], sys.T[t], c_t, sys.H[t], sys.Q[t], t, T_len)
+            update_filter!(
+                filter, 
+                sys.Z[t], 
+                sys.T[t], 
+                c_t, 
+                sys.H[t], 
+                sys.Q[t], 
+                t, 
+                T_len
+            )
         else
-            update_filter!(filter, y_t, sys.Z[t], sys.T[t], d_t, c_t, sys.H[t], sys.Q[t], t, T_len)
+            update_filter!(
+                filter, 
+                y_t, 
+                sys.Z[t], 
+                sys.T[t], 
+                d_t, 
+                c_t, 
+                sys.H[t], 
+                sys.Q[t], 
+                t, 
+                T_len
+            )
         end
 	end
 	
@@ -710,7 +851,7 @@ function kalman_filter!(filter::WoodburyFilter, sys::LinearTimeInvariant)
 	filter.P[:,:,1]= sys.P1
 	
 	# Filter
-	@inbounds for t in 1:T_len
+	@inbounds for t = 1:T_len
         # data
         y_t= view(sys.y, :, t)
 
@@ -718,7 +859,18 @@ function kalman_filter!(filter::WoodburyFilter, sys::LinearTimeInvariant)
         if any(isnan, y_t)
             update_filter!(filter, sys.Z, sys.T, sys.c, Hi, sys.Q, t, T_len)
         else
-            update_filter!(filter, y_t, sys.Z, sys.T, sys.d, sys.c, Hi, sys.Q, t, T_len)
+            update_filter!(
+                filter, 
+                y_t, 
+                sys.Z, 
+                sys.T, 
+                sys.d, 
+                sys.c, 
+                Hi, 
+                sys.Q, 
+                t, 
+                T_len
+            )
         end
 	end
 	
@@ -737,7 +889,7 @@ function kalman_filter!(filter::WoodburyFilter, sys::LinearTimeVariant)
 	filter.P[:,:,1]= sys.P1
 	
 	# Filter
-	@inbounds for t in 1:T_len
+	@inbounds for t = 1:T_len
         # data
         y_t= view(sys.y, :, t)
 
@@ -757,7 +909,18 @@ function kalman_filter!(filter::WoodburyFilter, sys::LinearTimeVariant)
         if any(isnan, y_t)
             update_filter!(filter, sys.Z[t], sys.T[t], c_t, Hi, sys.Q[t], t, T_len)
         else
-            update_filter!(filter, y_t, sys.Z[t], sys.T[t], d_t, c_t, Hi, sys.Q[t], t, T_len)
+            update_filter!(
+                filter, 
+                y_t, 
+                sys.Z[t], 
+                sys.T[t], 
+                d_t, 
+                c_t, 
+                Hi, 
+                sys.Q[t], 
+                t, 
+                T_len
+            )
         end
 	end
 	

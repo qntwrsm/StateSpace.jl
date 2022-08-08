@@ -26,12 +26,13 @@ the State Space model `model` with system matrices `sys` at parameter vector
 #### Returns
   - `ll::Real`          : average negative log-likelihood value 
 """
-function objective( ψ::AbstractVector, 
-                    model::StateSpaceModel, 
-                    filter::KalmanFilter, 
-                    sys::StateSpaceSystem,
-                    method::Symbol
-                    )
+function objective(
+    ψ::AbstractVector, 
+    model::StateSpaceModel, 
+    filter::KalmanFilter, 
+    sys::StateSpaceSystem,
+    method::Symbol
+)
     # Get dims
     (n,T)= size(model.y) 
 
@@ -74,14 +75,15 @@ parameters of a linear Gaussian State Space model.
 #### Returns
   - `ll::Real`          : log-likelihood value 
 """
-function _maximum_likelihood!(  model::StateSpaceModel,
-                                init::NamedTuple, 
-                                method::Symbol,
-                                pen::Penalization,
-                                ϵ_abs::Real, 
-                                ϵ_rel::Real, 
-                                max_iter::Integer
-                                )            
+function _maximum_likelihood!(
+    model::StateSpaceModel,
+    init::NamedTuple, 
+    method::Symbol,
+    pen::Penalization,
+    ϵ_abs::Real, 
+    ϵ_rel::Real, 
+    max_iter::Integer
+)            
     # Initialize state space model and system
     sys= init!(model, init, method)
 
@@ -129,14 +131,15 @@ function _maximum_likelihood!(  model::StateSpaceModel,
     return -(n * T_len) * f(ψ)
 end
 
-function _maximum_likelihood!(  model::StateSpaceModel,
-                                init::NamedTuple, 
-                                method::Symbol,
-                                pen::NoPen,
-                                ϵ_abs::Real, 
-                                ϵ_rel::Real, 
-                                max_iter::Integer
-                                )            
+function _maximum_likelihood!(
+    model::StateSpaceModel,
+    init::NamedTuple, 
+    method::Symbol,
+    pen::NoPen,
+    ϵ_abs::Real, 
+    ϵ_rel::Real, 
+    max_iter::Integer
+)            
     # Initialize state space model and system
     sys= init!(model, init, method)
 
@@ -199,13 +202,14 @@ through ADMM.
 #### Returns
   - `ll::Real`          : log-likelihood value      
 """
-function maximum_likelihood!(   model::StateSpaceModel; 
-                                init::NamedTuple=NamedTuple(), 
-                                method::Symbol=:collapsed,
-                                pen::Penalization=NoPen(),
-                                ϵ_abs::Real=1e-7, 
-                                ϵ_rel::Real=1e-4, 
-                                max_iter::Integer=1_000
-                                )
+function maximum_likelihood!(
+    model::StateSpaceModel; 
+    init::NamedTuple=NamedTuple(), 
+    method::Symbol=:collapsed,
+    pen::Penalization=NoPen(),
+    ϵ_abs::Real=1e-7, 
+    ϵ_rel::Real=1e-4, 
+    max_iter::Integer=1_000
+)
     return _maximum_likelihood!(model, init, method, pen, ϵ_abs, ϵ_rel, max_iter)
 end

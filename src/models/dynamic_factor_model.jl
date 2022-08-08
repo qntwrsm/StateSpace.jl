@@ -24,7 +24,12 @@ struct DynamicFactorModel{Ty, Tr, Tm, TΛ, Tϕ, Te} <: StateSpaceModel
     error::Te   # error specification
 end
 # Constructors
-function DynamicFactorModel(y::AbstractMatrix, r::Integer, mean::AbstractMeanModel, error::AbstractErrorModel)
+function DynamicFactorModel(
+    y::AbstractMatrix, 
+    r::Integer, 
+    mean::AbstractMeanModel, 
+    error::AbstractErrorModel
+)
     # Get dims
     n= size(y,1)
     
@@ -78,7 +83,11 @@ function get_params!(ψ::AbstractVector, model::DynamicFactorModel)
     return nothing
 end
 
-function get_system!(sys::LinearTimeInvariant, model::DynamicFactorModel, method::Symbol)
+function get_system!(
+    sys::LinearTimeInvariant, 
+    model::DynamicFactorModel, 
+    method::Symbol
+)
     # Store values
     sys.T.= model.ϕ
     if method === :univariate
@@ -124,7 +133,11 @@ function get_system!(sys::LinearTimeInvariant, model::DynamicFactorModel, method
     return nothing
 end
 
-function get_system!(sys::LinearTimeVariant, model::DynamicFactorModel, method::Symbol)
+function get_system!(
+    sys::LinearTimeVariant, 
+    model::DynamicFactorModel, 
+    method::Symbol
+)
     # get dims
     T_len= size(model.y,2) 
 
@@ -163,7 +176,7 @@ function get_system!(sys::LinearTimeVariant, model::DynamicFactorModel, method::
         # Store values
         mul!(sys.y, A, model.y)
         sys.Z[1].= pinv(transpose(U))
-        @inbounds for t in 2:T_len
+        @inbounds for t = 2:T_len
             sys.Z[t].= sys.Z[1]
         end
         if !isa(model.mean, NoConstant)
@@ -171,7 +184,7 @@ function get_system!(sys::LinearTimeVariant, model::DynamicFactorModel, method::
         end
     else
         # Store values
-        @inbounds for t in 1:T_len
+        @inbounds for t = 1:T_len
             sys.Z[t].= model.Λ
             sys.H[t].= cov(model)
         end
@@ -239,7 +252,7 @@ function init_ϕ!(ϕ::Diagonal, pc::AbstractMatrix)
     T= eltype(pc)
 
     # OLS
-    @inbounds @fastmath for i in 1:r
+    @inbounds @fastmath for i = 1:r
         y= view(pc,i,2:T_len)
         x= view(pc,i,1:T_len-1)
         ϕ_i= dot(x, y) * inv(sum(abs2, x))
@@ -305,7 +318,11 @@ function create_system(model::DynamicFactorModel, method::Symbol)
     return sys
 end
 
-function fix_system!(sys::LinearTimeInvariant, model::DynamicFactorModel, method::Symbol)
+function fix_system!(
+    sys::LinearTimeInvariant, 
+    model::DynamicFactorModel, 
+    method::Symbol
+)
     # infer type
     T= eltype(model.y)
 
@@ -322,7 +339,11 @@ function fix_system!(sys::LinearTimeInvariant, model::DynamicFactorModel, method
     sys.c.= zero(T)
 end
 
-function fix_system!(sys::LinearTimeVariant, model::DynamicFactorModel, method::Symbol)
+function fix_system!(
+    sys::LinearTimeVariant, 
+    model::DynamicFactorModel, 
+    method::Symbol
+)
     #  get dims
     T_len= size(model.y,2)
 
@@ -333,11 +354,11 @@ function fix_system!(sys::LinearTimeVariant, model::DynamicFactorModel, method::
         sys.y.= model.y
     end
     if method === :univariate || method === :collapsed
-        @inbounds for t in 1:T_len
+        @inbounds for t = 1:T_len
             sys.H[t].diag.= one(T)
         end
     end
-    @inbounds for t in 1:T_len
+    @inbounds for t = 1:T_len
         sys.Q[t].diag.= one(T)
     end
     if model.mean isa NoConstant
@@ -352,7 +373,7 @@ function init_system!(sys::StateSpaceSystem, model::DynamicFactorModel)
     sys.a1.= zero(T)
     # P
     sys.P1.= zero(T)
-    @inbounds @fastmath for i in 1:model.r
+    @inbounds @fastmath for i = 1:model.r
         sys.P1[i,i]= one(T)
     end
     
@@ -398,7 +419,7 @@ function loglik(filter::KalmanFilter, model::DynamicFactorModel, method::Symbol)
         # Add projected out term
         ll-= .5 * (n - model.r) * T_len * log(2*π)
         e= similar(model.y, n)
-        @inbounds @fastmath for t in 1:T_len
+        @inbounds @fastmath for t = 1:T_len
             mul!(e, M, view(model.y,:,t))
             ll-= .5 * dot(e, prec(model), e)
         end
@@ -428,7 +449,7 @@ function f_ϕ(ϕ::AbstractVector, A::AbstractMatrix, B::AbstractMatrix)
 
     # objective function
     f= zero(eltype(ϕ))
-    @inbounds @fastmath for i in axes(ϕ,1)
+    @inbounds @fastmath for i ∈ axes(ϕ,1)
         ϕ_i= logistic(ϕ[i], offset=one(T), scale=2 * one(T))
         f+= .5 * ϕ_i^2 * B[i,i] - ϕ_i * A[i,i]
     end
@@ -450,11 +471,16 @@ parameter ``ϕ`` (gradient of negative log-likelihood w.r.t. ``ϕ``).
 #### Returns
   - `∇f::AbstractVector`: gradient
 """
-function ∇f_ϕ!(∇f::AbstractVector, ϕ::AbstractVector, A::AbstractMatrix, B::AbstractMatrix)
+function ∇f_ϕ!(
+    ∇f::AbstractVector, 
+    ϕ::AbstractVector, 
+    A::AbstractMatrix, 
+    B::AbstractMatrix
+)
     # type
     T= eltype(ϕ)
 
-    @inbounds @fastmath for i in axes(ϕ,1)
+    @inbounds @fastmath for i ∈ axes(ϕ,1)
         ϕ_i= logistic(ϕ[i], offset=one(T), scale=2 * one(T))
         jacob= 2 * logistic(ϕ[i]) * (one(T) - logistic(ϕ[i]))
         ∇f[i]= (ϕ_i * B[i,i] - A[i,i]) * jacob
@@ -510,8 +536,12 @@ Update loading matrix parameters `Λ`, storing the result in `model`.
   - `smoother::Smoother`        : Kalman smoother output
   - `pen::Penalization`         : penalization parameters
 """
-function update_Λ!(model::DynamicFactorModel, state::EMOptimizerState, 
-                    smoother::Smoother, pen::Penalization)
+function update_Λ!(
+    model::DynamicFactorModel, 
+    state::EMOptimizerState, 
+    smoother::Smoother, 
+    pen::Penalization
+)
     # residuals
     resid(model).= model.y .- mean(model)
     # precision matrix
@@ -525,7 +555,7 @@ function update_Λ!(model::DynamicFactorModel, state::EMOptimizerState,
     b= -inv(prod(size(model.y))) * vec(Ω * resid(model) * transpose(smoother.α))
     # I + A, with A quadratic coefficient
     tmp= inv(prod(size(model.y))) * kron(state.V_0, Ω)
-    @inbounds @fastmath for i in axes(tmp,1)
+    @inbounds @fastmath for i ∈ axes(tmp,1)
         tmp[i,i]+= one(eltype(tmp))
     end
     # Cholesky decomposition
@@ -541,8 +571,12 @@ function update_Λ!(model::DynamicFactorModel, state::EMOptimizerState,
     return nothing
 end
 
-function update_Λ!(model::DynamicFactorModel, state::EMOptimizerState, 
-                    smoother::Smoother, pen::NoPen)
+function update_Λ!(
+    model::DynamicFactorModel, 
+    state::EMOptimizerState, 
+    smoother::Smoother, 
+    pen::NoPen
+)
     # residuals
     resid(model).= model.y .- mean(model)
 
@@ -570,7 +604,11 @@ Calculate residuals based on factors only.
 #### Returns
   - `ε::AbstractMatrix` : residuals
 """
-function resid_factors!(ε::AbstractMatrix, model::DynamicFactorModel, smoother::Smoother)    
+function resid_factors!(
+    ε::AbstractMatrix, 
+    model::DynamicFactorModel, 
+    smoother::Smoother
+)    
     # Update residuals
     ε.= model.y
     mul!(ε, model.Λ, smoother.α, -1., 1.)
@@ -578,8 +616,12 @@ function resid_factors!(ε::AbstractMatrix, model::DynamicFactorModel, smoother:
     return nothing
 end
 
-function update_model!(model::DynamicFactorModel, state::EMOptimizerState, 
-                        smoother::Smoother, pen::NamedTuple)
+function update_model!(
+    model::DynamicFactorModel, 
+    state::EMOptimizerState, 
+    smoother::Smoother, 
+    pen::NamedTuple
+)
     # Closure of function
     init_resid!(ε::AbstractMatrix)= resid_factors!(ε, model, smoother) 
     

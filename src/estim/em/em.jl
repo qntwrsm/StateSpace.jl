@@ -50,9 +50,14 @@ linear Gaussian State Space model as defined by `model`, storing the results in
 #### Returns
   - `ll::Real`  : log-likelihood value      
 """
-function em!(model::StateSpaceModel, pen::NamedTuple; 
-            method::Symbol=:univariate, init::NamedTuple=NamedTuple(), 
-            ϵ::Real=1e-4, max_iter::Integer=1000)
+function em!(
+    model::StateSpaceModel, 
+    pen::NamedTuple; 
+    method::Symbol=:univariate, 
+    init::NamedTuple=NamedTuple(), 
+    ϵ::Real=1e-4, 
+    max_iter::Integer=1000
+)
     # Initialize state space model and system
     sys= init!(model, init, method)
 
@@ -66,8 +71,16 @@ function em!(model::StateSpaceModel, pen::NamedTuple;
     get_params!(ψ, model)
 
     # Initialize state
-    state= EMState(ψ, similar(ψ), similar(ψ), similar(ψ), similar(ψ, p, p), 
-                    similar(ψ, p, p), similar(ψ, p, p), similar(ψ, p, p))
+    state= EMState(
+        ψ, 
+        similar(ψ), 
+        similar(ψ), 
+        similar(ψ), 
+        similar(ψ, p, p), 
+        similar(ψ, p, p), 
+        similar(ψ, p, p), 
+        similar(ψ, p, p)
+    )
 
     # Initialize filter and smoother
     T= eltype(model.y)  # type
@@ -132,9 +145,14 @@ are stored in `model`.
 #### Returns
   - `ll::Real`  : log-likelihood value      
 """
-function ecm!(model::StateSpaceModel, pen::NamedTuple; 
-                method::Symbol=:univariate, init::NamedTuple=NamedTuple(), 
-                ϵ::Real=1e-4, max_iter::Integer=1000)            
+function ecm!(
+    model::StateSpaceModel, 
+    pen::NamedTuple; 
+    method::Symbol=:univariate, 
+    init::NamedTuple=NamedTuple(), 
+    ϵ::Real=1e-4, 
+    max_iter::Integer=1000
+)            
     # Initialize state space model and system
     sys= init!(model, init, method)
 
@@ -148,8 +166,15 @@ function ecm!(model::StateSpaceModel, pen::NamedTuple;
     get_params!(ψ, model)
 
     # Initialize state
-    state= ECMState(ψ, similar(ψ), similar(ψ), similar(ψ, p, p), similar(ψ, p, p), 
-                    similar(ψ, p, p), similar(ψ, p, p))
+    state= ECMState(
+        ψ, 
+        similar(ψ), 
+        similar(ψ), 
+        similar(ψ, p, p), 
+        similar(ψ, p, p), 
+        similar(ψ, p, p), 
+        similar(ψ, p, p)
+    )
 
     # Initialize filter and smoother
     T= eltype(model.y)  # type

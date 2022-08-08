@@ -50,8 +50,15 @@ univariate treatment, storing the result in `a_f` and `P_f`.
   - `a_f::AbstractVector`	: predicted state at ``t+1`` (p x 1)
   - `P_f::AbstractMatrix`	: predicted states variance at time ``t+1`` (p x p)
 """
-function forward!(a_f::AbstractVector, P_f::AbstractMatrix, a_i::AbstractVector, 
-						P_i::AbstractMatrix, K_i::AbstractVector, v::Real, F::Real)
+function forward!(
+    a_f::AbstractVector, 
+    P_f::AbstractMatrix, 
+    a_i::AbstractVector, 
+	P_i::AbstractMatrix, 
+    K_i::AbstractVector, 
+    v::Real, 
+    F::Real
+)
 	# aᵢ₊₁ = aᵢ + vｘKᵢ
 	a_f.= a_i .+ v .* K_i
 
@@ -79,9 +86,16 @@ univariate treatment, storing the result in `a_p` and `P_p`.
   - `a_p::AbstractVector`	: predicted state at time ``t+1`` (p x 1)
   - `P_p::AbstractMatrix`	: predicted states variance at time ``t+1`` (p x p)
 """
-function predict!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVector, 
-						P_t::AbstractMatrix, T::AbstractMatrix, Q::AbstractMatrix, 
-						c::AbstractVector, tmp::AbstractMatrix)
+function predict!(
+    a_p::AbstractVector, 
+    P_p::AbstractMatrix, 
+    a_t::AbstractVector, 
+	P_t::AbstractMatrix, 
+    T::AbstractMatrix, 
+    Q::AbstractMatrix, 
+	c::AbstractVector, 
+    tmp::AbstractMatrix
+)
 	# Predict states
 	mul!(a_p, T, a_t)
 	a_p.+= c
@@ -97,9 +111,16 @@ function predict!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVector,
 	return nothing
 end
 
-function predict!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVector, 
-						P_t::AbstractMatrix, T::AbstractMatrix, Q::Diagonal, 
-						c::AbstractVector, tmp::AbstractMatrix)
+function predict!(
+    a_p::AbstractVector, 
+    P_p::AbstractMatrix, 
+    a_t::AbstractVector, 
+	P_t::AbstractMatrix, 
+    T::AbstractMatrix, 
+    Q::Diagonal, 
+	c::AbstractVector, 
+    tmp::AbstractMatrix
+)
 	# Predict states
 	mul!(a_p, T, a_t)
 	a_p.+= c
@@ -110,16 +131,23 @@ function predict!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVector,
 	# TｘPₜｘT'
 	mul!(P_p, T, tmp)
 	# Pₜ₊₁ = TｘPₜｘT' + Q
-	@inbounds @fastmath for i in axes(Q,1)
+	@inbounds @fastmath for i ∈ axes(Q,1)
 		P_p[i,i]+= Q.diag[i]
 	end
 	
 	return nothing
 end
 
-function predict!(a_p::AbstractVector, P_p::AbstractMatrix, a_t::AbstractVector, 
-						P_t::AbstractMatrix, T::Diagonal, Q::Diagonal, 
-						c::AbstractVector, tmp::AbstractMatrix)
+function predict!(
+    a_p::AbstractVector, 
+    P_p::AbstractMatrix, 
+    a_t::AbstractVector, 
+	P_t::AbstractMatrix, 
+    T::Diagonal, 
+    Q::Diagonal, 
+	c::AbstractVector, 
+    tmp::AbstractMatrix
+)
 	# Predict states
 	a_p.= T.diag .* a_t .+ c
 
@@ -145,13 +173,15 @@ Update Kalman filter components at time `t`, storing the results in `filter`.
 #### Returns
   - `filter::UnivariateFilter`  : Kalman filter components
 """
-function update_filter!(filter::UnivariateFilter, 
-                        y::Real, 
-                        Z::AbstractVector, 
-                        d::Real, 
-                        σ²::Real, 
-                        i::Integer,
-                        t::Integer)
+function update_filter!(
+    filter::UnivariateFilter, 
+    y::Real, 
+    Z::AbstractVector, 
+    d::Real, 
+    σ²::Real, 
+    i::Integer,
+    t::Integer
+)
     # Store views 
     a= view(filter.a,:,i,t)
     a_f= view(filter.a,:,i+1,t)
@@ -189,11 +219,13 @@ i.e. NaN, storing the results in `filter`.
 #### Returns
   - `filter::KalmanFilter`  : Kalman filter components
 """
-function update_filter!(filter::UnivariateFilter, 
-                        Z::AbstractVector, 
-                        σ²::Real, 
-                        i::Integer,
-                        t::Integer)
+function update_filter!(
+    filter::UnivariateFilter, 
+    Z::AbstractVector, 
+    σ²::Real, 
+    i::Integer,
+    t::Integer
+)
     # Store views 
     a= view(filter.a,:,i,t)
     a_f= view(filter.a,:,i+1,t)
@@ -240,7 +272,7 @@ function kalman_filter!(filter::UnivariateFilter, sys::LinearTimeInvariant)
 	filter.P[:,:,1,1]= sys.P1
 	
 	# Filter
-	@inbounds for t in 1:T_len
+	@inbounds for t = 1:T_len
 		for i in 1:n
 	        # Store view
 			Z_i= view(Z,i,:)
@@ -249,7 +281,15 @@ function kalman_filter!(filter::UnivariateFilter, sys::LinearTimeInvariant)
             if isnan(sys.y[i,t])
                 update_filter!(filter, Z_i, sys.H.diag[i], i, t)
             else
-                update_filter!(filter, sys.y[i,t], Z_i, sys.d[i], sys.H.diag[i], i, t)
+                update_filter!(
+                    filter, 
+                    sys.y[i,t], 
+                    Z_i, 
+                    sys.d[i], 
+                    sys.H.diag[i], 
+                    i, 
+                    t
+                )
             end
 		end
 		
@@ -277,7 +317,7 @@ function kalman_filter!(filter::UnivariateFilter, sys::LinearTimeVariant)
 	filter.P[:,:,1,1]= sys.P1
 	
 	# Filter
-	@inbounds for t in 1:T_len
+	@inbounds for t = 1:T_len
 		# store
 		Z_t= sys.Z[t]
 		H_t= sys.H[t]
@@ -290,7 +330,15 @@ function kalman_filter!(filter::UnivariateFilter, sys::LinearTimeVariant)
             if isnan(sys.y[i,t])
                 update_filter!(filter, Z_it, H_t.diag[i], i, t)
             else
-                update_filter!(filter, sys.y[i,t], Z_it, sys.d[i,t], H_t.diag[i], i, t)
+                update_filter!(
+                    filter, 
+                    sys.y[i,t], 
+                    Z_it,
+                    sys.d[i,t], 
+                    H_t.diag[i], 
+                    i, 
+                    t
+                )
             end
 		end
 		
