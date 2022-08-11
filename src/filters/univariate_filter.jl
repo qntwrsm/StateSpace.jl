@@ -275,7 +275,7 @@ function kalman_filter!(filter::UnivariateFilter, sys::LinearTimeInvariant)
 	@inbounds for t = 1:T_len
 		for i in 1:n
 	        # Store view
-			Z_i= view(Z,i,:)
+			Z_i= view(sys.Z,i,:)
 
             # update filter
             if isnan(sys.y[i,t])
