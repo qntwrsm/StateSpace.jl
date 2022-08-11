@@ -205,7 +205,7 @@ function reinstantiate(model::Exogeneous, h::Integer)
     return Exogeneous(μ, model.β, X, model.C)
 end
 
-forecast!(model::AbstractMeanModel, h::Integer)= model
+forecast!(model::AbstractMeanModel, h::Integer)= nothing
 function forecast!(model::Exogeneous, h::Integer)
     # number of obs
     T= size(mean(model),2) - h
