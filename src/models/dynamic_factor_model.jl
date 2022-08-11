@@ -543,7 +543,7 @@ function update_Λ!(
     pen::Penalization
 )
     # residuals
-    resid(model).= model.y .- mean(model)
+    resid(model).= isnothing(mean(model)) ? model.y : model.y .- mean(model)
     # precision matrix
     Ω= prec(model)
 
@@ -578,7 +578,7 @@ function update_Λ!(
     pen::NoPen
 )
     # residuals
-    resid(model).= model.y .- mean(model)
+    resid(model).= isnothing(mean(model)) ? model.y : model.y .- mean(model)
 
     # Gram matrix
     α_1= view(smoother.α,:,1)
@@ -636,7 +636,7 @@ function update_model!(
 
     # Update residuals
     ε= resid(model) # retrieve residual container
-    ε.= model.y .- mean(model)
+    ε.= isnothing(mean(model)) ? model.y : model.y .- mean(model)
     mul!(ε, model.Λ, smoother.α, -1., 1.)
 
     return nothing
