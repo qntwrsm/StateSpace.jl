@@ -33,7 +33,11 @@ struct LinearTimeInvariant{Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP} <: StateSpaceSyst
 	P1::TP	# initial state variance
 end
 # Constructor
-function LinearTimeInvariant{Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP}(n::Integer, p::Integer, T_len::Integer) where {Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP}
+function LinearTimeInvariant{Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP}(
+    n::Integer, 
+    p::Integer, 
+    T_len::Integer
+) where {Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP}
 	# data
 	y= Ty(undef, n, T_len)
 
@@ -71,20 +75,24 @@ struct LinearTimeVariant{Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP} <: StateSpaceSystem
 	P1::TP	# initial state variance
 end
 # Constructor
-function LinearTimeVariant{Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP}(n::Integer, p::Integer, T_len::Integer) where {Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP}
+function LinearTimeVariant{Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP}(
+    n::Integer, 
+    p::Integer, 
+    T_len::Integer
+) where {Ty, TZ, TT, Td, Tc, TH, TQ, Ta, TP}
 	# data
 	y= Ty(undef, n, T_len)
 
     # Initialize system components
-    Z= [TZ(undef, n, p) for _ in 1:T_len]
-    T= TT <: Diagonal ? [TT(undef, p) for _ in 1:T_len] : 
-                        [TT(undef, p, p) for _ in 1:T_len]
+    Z= [TZ(undef, n, p) for _ = 1:T_len]
+    T= TT <: Diagonal ? [TT(undef, p) for _ = 1:T_len] : 
+                        [TT(undef, p, p) for _ = 1:T_len]
 	d= Td(undef, n, T_len)
 	c= Tc(undef, p, T_len)
-    H= TH <: Diagonal ? [TH(undef, n) for _ in 1:T_len] : 
-                        [Symmetric(Matrix{eltype(TH)}(undef, n, n)) for _ in 1:T_len]
-    Q= TQ <: Diagonal ? [TQ(undef, p) for _ in 1:T_len] : 
-                        [Symmetric(Matrix{eltype(TQ)}(undef, p, p)) for _ in 1:T_len]
+    H= TH <: Diagonal ? [TH(undef, n) for _ = 1:T_len] : 
+                        [Symmetric(Matrix{eltype(TH)}(undef, n, n)) for _ = 1:T_len]
+    Q= TQ <: Diagonal ? [TQ(undef, p) for _ = 1:T_len] : 
+                        [Symmetric(Matrix{eltype(TQ)}(undef, p, p)) for _ = 1:T_len]
 
 	# Initial conditions
 	a1= similar(Ta, p)

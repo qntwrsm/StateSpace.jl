@@ -38,9 +38,15 @@ Update state and model using the maximization step of the EM algorithm.
   - `ϵ_rel::Real`           : relative tolerance
   - `max_iter::Integer`     : max number of iterations
 """
-function mstep!(state::EMState, model::StateSpaceModel, smoother::Smoother,
-                fixed::NamedTuple; 
-                ϵ_abs::Real=1e-7, ϵ_rel::Real=1e-3, max_iter::Integer=1000)
+function mstep!(
+    state::EMState, 
+    model::StateSpaceModel, 
+    smoother::Smoother,
+    fixed::NamedTuple; 
+    ϵ_abs::Real=1e-7, 
+    ϵ_rel::Real=1e-3, 
+    max_iter::Integer=1000
+)
     # Get dims
     T_len= size(model.y,2)
 
@@ -105,8 +111,12 @@ algorithm.
   - `smoother::Smoother`    : Kalman smoother output
   - `fixed::NamedTuple`     : fixed hyper parameters
 """
-function mstep!(state::ECMState, model::StateSpaceModel, smoother::Smoother,
-                pen::NamedTuple)
+function mstep!(
+    state::ECMState, 
+    model::StateSpaceModel, 
+    smoother::Smoother,
+    pen::NamedTuple
+)
     # Get dims
     T_len= size(model.y,2)
 

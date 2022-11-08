@@ -23,8 +23,12 @@ mutable struct DynamicNelsonSiegelModel{Ty, Tτ, Tλ, Tϕ, Teobs, Tefac} <: Stat
     error_factor::Tefac # factor eq. error specification
 end
 # Constructors
-function DynamicNelsonSiegelModel(y::AbstractMatrix, τ::AbstractVector, 
-                                    error_obs::AbstractErrorModel, error_factor::AbstractErrorModel)    
+function DynamicNelsonSiegelModel(
+    y::AbstractMatrix, 
+    τ::AbstractVector, 
+    error_obs::AbstractErrorModel, 
+    error_factor::AbstractErrorModel
+)    
     # hyper paremeters
     λ= .0609
     ϕ= similar(y, 3, 3)
@@ -47,7 +51,7 @@ function loadings!(Λ::AbstractMatrix, model::DynamicNelsonSiegelModel)
     n= length(τ)
 
     Λ.= one(eltype(Λ))
-    @inbounds @fastmath for i in 1:n
+    @inbounds @fastmath for i = 1:n
         Λ[i,2]= (1 - exp(-λ * τ[i])) * inv(λ * τ[i])
         Λ[i,3]= Λ[i,2] - exp(-λ * τ[i])
     end
@@ -89,7 +93,11 @@ function get_params!(ψ::AbstractVector, model::DynamicNelsonSiegelModel)
     return nothing
 end
 
-function get_system!(sys::LinearTimeInvariant, model::DynamicNelsonSiegelModel, method::Symbol)
+function get_system!(
+    sys::LinearTimeInvariant, 
+    model::DynamicNelsonSiegelModel, 
+    method::Symbol
+)
     Λ= loadings(model)  # loadings
 
     # Store values
@@ -255,7 +263,11 @@ function create_system(model::DynamicNelsonSiegelModel, method::Symbol)
     return sys
 end
 
-function fix_system!(sys::LinearTimeInvariant, model::DynamicNelsonSiegelModel, method::Symbol)
+function fix_system!(
+    sys::LinearTimeInvariant, 
+    model::DynamicNelsonSiegelModel, 
+    method::Symbol
+)
     # infer type
     T= eltype(model.y)
 
@@ -275,7 +287,7 @@ function init_system!(sys::StateSpaceSystem, model::DynamicNelsonSiegelModel)
     sys.a1.= zero(T)
     # P
     sys.P1.= zero(T)
-    @inbounds @fastmath for i in 1:3
+    @inbounds @fastmath for i = 1:3
         sys.P1[i,i]= one(T)
     end
     
@@ -284,7 +296,11 @@ end
 
 # Estimation
 # Log-likelihood
-function loglik(filter::KalmanFilter, model::DynamicNelsonSiegelModel, method::Symbol)
+function loglik(
+    filter::KalmanFilter, 
+    model::DynamicNelsonSiegelModel, 
+    method::Symbol
+)
     # Compute log-likelihood
     ll= loglik(filter)
 
@@ -323,7 +339,7 @@ function loglik(filter::KalmanFilter, model::DynamicNelsonSiegelModel, method::S
         # Add projected out term
         ll-= .5 * (n - model.r) * T_len * log(2*π)
         e= similar(model.y, n)
-        @inbounds @fastmath for t in 1:T_len
+        @inbounds @fastmath for t = 1:T_len
             mul!(e, M, view(model.y,:,t))
             ll-= .5 * dot(e, prec(model), e)
         end
@@ -340,7 +356,14 @@ function reinstantiate(model::DynamicNelsonSiegelModel, h::Integer)
     # expand
     y_f= hcat(model.y, fill(NaN, n, h))
 
-    return DynamicNelsonSiegelModel(y_f, model.τ, model.λ, model.ϕ, model.error_obs, model.error_factor)
+    return DynamicNelsonSiegelModel(
+        y_f, 
+        model.τ, 
+        model.λ, 
+        model.ϕ, 
+        model.error_obs, 
+        model.error_factor
+    )
 end
 
 function forecast(model::DynamicNelsonSiegelModel, h::Integer)
