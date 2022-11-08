@@ -63,7 +63,7 @@ prox!(x::AbstractVector, λ::Real, pen::NoPen)= nothing
 prox!(x::AbstractVector, λ::Real, pen::Lasso)= x.= soft_thresh.(x, λ .* pen.γ .* vec(pen.weights))
 function prox!(x::AbstractVector, λ::Real, pen::GroupLasso)
     idx= 1
-    for g in 1:length(pen.groups)
+    for g ∈ eachindex(pen.groups)
         rng= idx:idx+pen.groups[g]-1
         x_g= view(x,rng)
         block_soft_thresh!(x_g, λ * pen.γ * pen.weights[g])
@@ -75,7 +75,7 @@ end
 function prox!(x::AbstractVector, λ::Real, pen::SparseGroupLasso)
     idx= 1
     x.= soft_thresh.(x, λ .* pen.γ .* pen.α .* vec(pen.weights_l1))
-    for g in 1:length(pen.groups)
+    for g ∈ eachindex(pen.groups)
         rng= idx:idx+pen.groups[g]-1
         x_g= view(x,rng)
         block_soft_thresh!(x_g, λ * pen.γ * (one(pen.α) - pen.α) * pen.weights_l2[g])

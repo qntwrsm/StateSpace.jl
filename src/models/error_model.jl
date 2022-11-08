@@ -81,12 +81,13 @@ struct SpatialErrorModel{Tε, TΣ, Tρ, Tf, TW, TG, Tg, Te} <: AbstractErrorMode
     error::Te   # idiosyncratic error specification
 end
 # Constructor
-function SpatialErrorModel( ε::AbstractMatrix, 
-                            ρ::AbstractVector, 
-                            W::AbstractMatrix, 
-                            groups::AbstractVector, 
-                            error::AbstractErrorModel
-                        )
+function SpatialErrorModel( 
+    ε::AbstractMatrix, 
+    ρ::AbstractVector, 
+    W::AbstractMatrix, 
+    groups::AbstractVector, 
+    error::AbstractErrorModel
+)
     # dims
     n= sum(groups)
 
@@ -121,12 +122,13 @@ struct SpatialMovingAverageModel{Tε, TΣ, Tρ, TW, TG, Tg, Te} <: AbstractError
     error::Te   # idiosyncratic error specification
 end
 # Constructor
-function SpatialMovingAverageModel( ε::AbstractMatrix, 
-                                    ρ::AbstractVector, 
-                                    W::AbstractMatrix, 
-                                    groups::AbstractVector, 
-                                    error::AbstractErrorModel
-                                )
+function SpatialMovingAverageModel( 
+    ε::AbstractMatrix, 
+    ρ::AbstractVector, 
+    W::AbstractMatrix, 
+    groups::AbstractVector, 
+    error::AbstractErrorModel
+)
     # dims
     n= sum(groups)
 
@@ -149,8 +151,8 @@ nparams(model::SpatialMovingAverageModel)= length(model.ρ) + nparams(model.erro
 get_params!(ψ::AbstractVector, model::Independent)= ψ.= log.(model.σ)
 function get_params!(ψ::AbstractVector, model::Idiosyncratic)
     k= 0
-    @inbounds @fastmath for j in axes(model.Σ,2)
-        for i in 1:j
+    @inbounds @fastmath for j ∈ axes(model.Σ,2)
+        for i = 1:j
             k+= 1
             ψ[idx+k]= model.Σ[i,j]
         end
@@ -160,7 +162,11 @@ function get_params!(ψ::AbstractVector, model::Idiosyncratic)
 end
 function get_params!(ψ::AbstractVector, model::SpatialErrorModel)
     get_params!(view(ψ,1:nparams(model.error)), model.error)
-    ψ[nparams(model.error)+1:end].= logit.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
+    ψ[nparams(model.error)+1:end].= logit.(
+        model.ρ, 
+        offset=model.ρ_max, 
+        scale=2 * model.ρ_max
+    )
 
     return nothing
 end
@@ -174,8 +180,8 @@ end
 store_params!(model::Independent, ψ::AbstractVector)= model.σ.= exp.(ψ)
 function store_params!(model::Idiosyncratic, ψ::AbstractVector)
     k= 0
-    @inbounds @fastmath for j in axes(model.Σ,2)
-        for i in 1:j
+    @inbounds @fastmath for j ∈ axes(model.Σ,2)
+        for i = 1:j
             k+= 1
             model.Σε[i,j]= ψ[idx+k]
         end
@@ -186,7 +192,11 @@ end
 function store_params!(model::SpatialErrorModel, ψ::AbstractVector)
     n= length(ψ)
     store_params!(model.error, view(ψ,1:nparams(model.error)))
-    model.ρ.= logistic.(view(ψ,nparams(model.error)+1:n); offset=model.ρ_max, scale=2 * model.ρ_max)
+    model.ρ.= logistic.(
+        view(ψ,nparams(model.error)+1:n), 
+        offset=model.ρ_max, 
+        scale=2 * model.ρ_max
+    )
 
     return nothing
 end
@@ -331,22 +341,22 @@ residuals `ε`, storing the result in `ρ`.
 #### Returns
   - `ρ::AbstractVector` : spatial dependence
 """
-function init_ρ!(   ρ::AbstractVector, 
-                    ε::AbstractMatrix, 
-                    W::AbstractMatrix, 
-                    groups::AbstractVector, 
-                    ρ_max::Real
-                )
+function init_ρ!(   
+    ρ::AbstractVector, 
+    ε::AbstractMatrix, 
+    W::AbstractMatrix, 
+    groups::AbstractVector, 
+    ρ_max::Real
+)
     # squared residuals
     ε_sq= ε * transpose(ε)
 
     idx= 1
-    @inbounds @fastmath for i in 1:length(ρ)
-        rng= idx:idx+groups[i]-1
+    @inbounds @fastmath for i ∈ eachindex(ρ)
         # numerator and denominator
         num= zero(eltype(ρ))
         denom= zero(eltype(ρ))
-        for j in rng
+        for j = idx:idx+groups[i]-1
             w= view(W,j,:)
             num+= dot(w, view(ε_sq,:,j))
             denom+= dot(w, ε_sq, w)
@@ -374,18 +384,19 @@ dependence `ρ` and spatial weights `W`, storing the result in `G`.
 #### Returns
   - `G::AbstractMatrix` : spatial AR lag polynomial  
 """
-function spatial_ar_polynomial!(G::AbstractMatrix, 
-                                ρ::AbstractVector, 
-                                W::AbstractMatrix, 
-                                groups::AbstractVector
-                                )
+function spatial_ar_polynomial!(
+    G::AbstractMatrix, 
+    ρ::AbstractVector, 
+    W::AbstractMatrix, 
+    groups::AbstractVector
+)
     idx= 1
-    @inbounds @fastmath for i in 1:length(ρ)
-        rng= idx:idx+groups[i]-1
-        G[rng,:].= -ρ[i] .* view(W,rng,:)
+    @inbounds @fastmath for (i, ρ_i) ∈ pairs(ρ)
+        rng= range(idx, idx+groups[i]-1)
+        G[rng,:].= -ρ_i .* view(W,rng,:)
         idx+= groups[i]
     end
-    @inbounds @fastmath for i in axes(G,1)
+    @inbounds @fastmath for i ∈ axes(G,1)
         G[i,i]+= one(eltype(G)) 
     end
 
@@ -406,18 +417,19 @@ dependence `ρ` and spatial weights `W`, storing the result in `G`.
 #### Returns
   - `G::AbstractMatrix` : spatial MA lag polynomial  
 """
-function spatial_ma_polynomial!(G::AbstractMatrix, 
-                                ρ::AbstractVector, 
-                                W::AbstractMatrix, 
-                                groups::AbstractVector
-                                )
+function spatial_ma_polynomial!(
+    G::AbstractMatrix, 
+    ρ::AbstractVector, 
+    W::AbstractMatrix, 
+    groups::AbstractVector
+)
     idx= 1
-    @inbounds @fastmath for i in 1:length(ρ)
+    @inbounds @fastmath for (i, ρ_i) ∈ pairs(ρ)
         rng= idx:idx+groups[i]-1
-        G[rng,:].= ρ[i] .* view(W,rng,:)
+        G[rng,:].= ρ_i .* view(W,rng,:)
         idx+= groups[i]
     end
-    @inbounds @fastmath for i in axes(G,1)
+    @inbounds @fastmath for i ∈ axes(G,1)
         G[i,i]+= one(eltype(G)) 
     end
 
@@ -439,7 +451,7 @@ function init_error!(model::Independent, init::NamedTuple)
         model.ω.= init.error.ω
     else
         T= size(model.ε,2)
-        @inbounds @fastmath for i in axes(model.σ,1)
+        @inbounds @fastmath for i ∈ axes(model.σ,1)
             ε_i= view(model.ε,i,:)
             model.σ[i]= inv(T) * sum(abs2, ε_i)
             model.ω[i]= inv(model.σ[i])
@@ -465,7 +477,13 @@ function init_error!(model::Idiosyncratic, init::NamedTuple)
 end
 function init_error!(model::SpatialErrorModel, init::NamedTuple)
     # spatial dependence
-    haskey(init, :error) ? model.ρ.= init.error.ρ : init_ρ!(model.ρ, resid(model), model.W, model.groups, model.ρ_max)
+    haskey(init, :error) ? model.ρ.= init.error.ρ : init_ρ!(
+        model.ρ, 
+        resid(model), 
+        model.W,
+        model.groups, 
+        model.ρ_max
+    )
 
     # spatial lag polynomial
     spatial_ar_polynomial!(model.G, model.ρ, model.W, model.groups)
@@ -520,10 +538,11 @@ spatial moving average model.
 #### Returns
   - `f::Real`   : objective function value
 """
-function f_spatial( ρ::AbstractVector, 
-                    model::SpatialErrorModel, 
-                    quad::AbstractMatrix
-                )
+function f_spatial( 
+    ρ::AbstractVector, 
+    model::SpatialErrorModel, 
+    quad::AbstractMatrix
+)
     # Get dims
     (n,T)= size(resid(model))
 
@@ -543,7 +562,7 @@ function f_spatial( ρ::AbstractVector,
 
     # objective function 
     f= zero(eltype(ρ))
-    @inbounds @fastmath for i in 1:n
+    @inbounds @fastmath for i = 1:n
         f+= dot(view(prec(model),:,i), view(e,:,i))
     end
     # logabsdet
@@ -551,10 +570,11 @@ function f_spatial( ρ::AbstractVector,
 
     return f * inv(2 * T) - d - log(s)
 end
-function f_spatial( ρ::AbstractVector, 
-                    model::SpatialMovingAverageModel, 
-                    quad::AbstractMatrix
-                )
+function f_spatial(
+    ρ::AbstractVector, 
+    model::SpatialMovingAverageModel, 
+    quad::AbstractMatrix
+)
     # Get dims
     (n,T)= size(resid(model))
 
@@ -575,7 +595,7 @@ function f_spatial( ρ::AbstractVector,
 
     # objective function 
     f= zero(eltype(ρ))
-    @inbounds @fastmath for i in 1:n
+    @inbounds @fastmath for i = 1:n
         f+= dot(view(prec(model),:,i), view(e,:,i))
     end
     # logabsdet
@@ -600,11 +620,12 @@ error or spatial moving average model.
 #### Returns
   - `∇f::AbstractVector`: gradient
 """
-function ∇f_spatial!(   ∇f::AbstractVector, 
-                        ρ::AbstractVector, 
-                        model::SpatialErrorModel, 
-                        quad::AbstractMatrix
-                    )
+function ∇f_spatial!(   
+    ∇f::AbstractVector, 
+    ρ::AbstractVector, 
+    model::SpatialErrorModel, 
+    quad::AbstractMatrix
+)
     # Get dims
     T= size(resid(model),2)
 
@@ -627,24 +648,24 @@ function ∇f_spatial!(   ∇f::AbstractVector,
 
     # gradient
     idx= 1
-    @inbounds @fastmath for i in 1:length(ρ)
-        rng= idx:idx+model.groups[i]-1
+    @inbounds @fastmath for (i, ρ_i) ∈ pairs(ρ)
         ∇f_i= zero(eltype(∇f))
-        for j in rng
+        for j = idx:idx+model.groups[i]-1
             ∇f_i+= ∇logdet[j,j] - inv(T) * dot(view(e,:,j), view(tmp_nn,:,j))
         end
-        jacob= 2 * model.ρ_max * logistic(ρ[i]) * (one(ρ[i]) - logistic(ρ[i]))
+        jacob= 2 * model.ρ_max * logistic(ρ_i) * (one(ρ_i) - logistic(ρ_i))
         ∇f[i]= ∇f_i * jacob
         idx+= model.groups[i]
     end
 
     return nothing
 end
-function ∇f_spatial!(   ∇f::AbstractVector, 
-                        ρ::AbstractVector, 
-                        model::SpatialMovingAverageModel, 
-                        quad::AbstractMatrix
-                    )
+function ∇f_spatial!(   
+    ∇f::AbstractVector, 
+    ρ::AbstractVector, 
+    model::SpatialMovingAverageModel, 
+    quad::AbstractMatrix
+)
     # Get dims
     T= size(resid(model),2)
 
@@ -671,13 +692,12 @@ function ∇f_spatial!(   ∇f::AbstractVector,
 
     # gradient
     idx= 1
-    @inbounds @fastmath for i in 1:length(ρ)
-        rng= idx:idx+model.groups[i]-1
+    @inbounds @fastmath for (i, ρ_i) ∈ pairs(ρ)
         ∇f_i= zero(eltype(∇f))
-        for j in rng
+        for j = idx:idx+model.groups[i]-1
             ∇f_i+= ∇logdet[j,j] - inv(T) * dot(view(e,:,j), view(prec(model),:,j))
         end
-        jacob= 2 * logistic(ρ[i]) * (one(ρ[i]) - logistic(ρ[i]))
+        jacob= 2 * logistic(ρ_i) * (one(ρ_i) - logistic(ρ_i))
         ∇f[i]= ∇f_i * jacob
         idx+= model.groups[i]
     end
@@ -698,7 +718,7 @@ Update error model hyper parameters, storing the results in `model`.
 """
 function update_error!(model::Independent, quad::AbstractMatrix, pen::Penalization)
     T= size(resid(model),2)
-    @inbounds @fastmath for i in axes(model.σ,1)
+    @inbounds @fastmath for i ∈ axes(model.σ,1)
         ε_i= view(resid(model),i,:)
         # variance
         model.σ[i]= inv(T) * ( sum(abs2, ε_i) + quad[i,i] )
@@ -708,12 +728,16 @@ function update_error!(model::Independent, quad::AbstractMatrix, pen::Penalizati
 
     return nothing
 end
-function update_error!(model::Idiosyncratic, quad::AbstractMatrix, pen::Penalization)
+function update_error!(
+    model::Idiosyncratic, 
+    quad::AbstractMatrix, 
+    pen::Penalization
+)
     # variance
     Σ= cov(model).data
     mul!(Σ, resid(model), transpose(resid(model)))
-    @inbounds @fastmath for j in axes(Σ,2)
-        for i in 1:j
+    @inbounds @fastmath for j ∈ axes(Σ,2)
+        for i = 1:j
             Σ[i,j]+= quad[i,j]
         end
     end
@@ -726,7 +750,11 @@ function update_error!(model::Idiosyncratic, quad::AbstractMatrix, pen::Penaliza
 
     return nothing
 end
-function update_error!(model::SpatialErrorModel, quad::AbstractMatrix, pen::Penalization)
+function update_error!(
+    model::SpatialErrorModel, 
+    quad::AbstractMatrix, 
+    pen::Penalization
+)
     # Idiosyncratic components
     mul!(resid(model.error), model.G, resid(model))
     quad_spat= model.G * quad * transpose(model.G)
@@ -767,7 +795,11 @@ function update_error!(model::SpatialErrorModel, quad::AbstractMatrix, pen::Pena
 
     return nothing
 end
-function update_error!(model::SpatialMovingAverageModel, quad::AbstractMatrix, pen::Penalization)
+function update_error!(
+    model::SpatialMovingAverageModel, 
+    quad::AbstractMatrix, 
+    pen::Penalization
+)
     # inverse
     Ginv= inv(model.G)
 
