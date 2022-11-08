@@ -73,7 +73,7 @@ Create system matrices from the state space model.
 #### Returns
   - `sys::StateSpaceSystem` : state space system matrices
 """
-function create_system! end
+function create_system end
 
 """
     init!(model, init, method)
