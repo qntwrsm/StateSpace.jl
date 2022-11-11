@@ -8,7 +8,15 @@ Currently only supports filtering, smoothing, and estimation for linear Gaussian
 
 # Filtering and Smoothing
 
+The following filter methods are supported `:univariate`, `:collapsed`, `:multivariate`, and `:woodbury`, which correspond to the following filter types
 
+- `UnivariateFilter`: Filter using the univariate treatment for a linear Gaussian state space model.
+- `MultivariateFilter`: Standard multivariate filter for a linear Gaussian state space model.
+- `WoodburyFilter`: Same as `MultivariateFilter`, but uses the Woodbury identity to compute the inverse.
+
+The smoother type is
+
+- `Smoother`: General state smoothing, which accepts both multivariate and univariate filters and handles arbitrary state autocovariance smoothing.
 
 # Estimation
 
