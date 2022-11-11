@@ -20,6 +20,8 @@ The smoother type is
 
 # Estimation
 
+Estimation can be done using Maximum Likelihood estimation and Expectation-Maximimxation algorithm. Both approaches can handle penalization/regularization on the parameters of the model.
+
 # Documentation
 
 # Installation
