@@ -10,7 +10,7 @@ makedocs(
         "filter.md",
         "smoother.md",
         "estimation.md"
-    ]
+    ],
     format = Documenter.HTML(
         prettyurls = get(ENV, "CI", nothing) == "true"
     )
