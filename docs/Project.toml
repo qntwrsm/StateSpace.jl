@@ -1,0 +1,9 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+FiniteDiff = "6a86dc24-6348-571c-b903-95158fe2bd41"
+MultivariateStats = "6f286f6a-111f-5878-ab1e-185364afe411"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+ProximalMethods = "4206358c-74de-4262-b9b2-8440947a766f"
+
+[compat]
+Documenter = "0.27"
