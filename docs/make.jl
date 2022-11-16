@@ -15,3 +15,7 @@ makedocs(
         prettyurls = get(ENV, "CI", nothing) == "true"
     )
 )
+
+deploydocs(
+    repo = "github.com/qntwrsm/StateSpace.jl.git",
+)
