@@ -24,6 +24,8 @@ Estimation can be done using Maximum Likelihood estimation and Expectation-Maxim
 
 # Documentation
 
+[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://qntwrsm.github.io/StateSpace.jl/dev)
+
 # Installation
 
 [![Build Status](https://github.com/qntwrsm/StateSpace.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/qntwrsm/StateSpace.jl/actions/workflows/CI.yml?query=branch%3Amain)
