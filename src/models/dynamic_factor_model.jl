@@ -421,6 +421,9 @@ function loglik(filter::KalmanFilter, model::DynamicFactorModel, method::Symbol)
         e= similar(model.y, n)
         @inbounds @fastmath for t = 1:T_len
             mul!(e, M, view(model.y,:,t))
+            if !(model.mean isa NoConstant)
+                mul!(e, M, view(mean(model),:,t), -1., 1.)
+            end
             ll-= .5 * dot(e, prec(model), e)
         end
     end
@@ -552,21 +555,25 @@ function update_Λ!(
     state.V_0.+= view(smoother.V,:,:,1,1) .+ α_1 .* transpose(α_1)
 
     # linear coefficient b
-    b= -inv(prod(size(model.y))) * vec(Ω * resid(model) * transpose(smoother.α))
-    # I + A, with A quadratic coefficient
-    tmp= inv(prod(size(model.y))) * kron(state.V_0, Ω)
-    @inbounds @fastmath for i ∈ axes(tmp,1)
-        tmp[i,i]+= one(eltype(tmp))
+    b= -vec(Ω * resid(model) * transpose(smoother.α))
+    # quadratic coefficient A
+    A= kron(state.V_0, Ω)
+    # scaling factor (lipschitz constant)
+    λ= inv(opnorm(A))
+    # I + λA, with A quadratic coefficient
+    lmul!(λ, A)
+    @inbounds @fastmath for i ∈ axes(A,1)
+        A[i,i]+= one(eltype(A))
     end
     # Cholesky decomposition
-    C= cholesky!(Hermitian(tmp))
+    C= cholesky!(Hermitian(A))
 
     # Proximal operators
     prox_g!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
     prox_f!(x::AbstractVector, λ::Real)= shrinkage!(x, λ, C, b)
 
     # Penalized estimation via admm
-    vec(model.Λ).= admm!(vec(model.Λ), prox_f!, prox_g!)
+    vec(model.Λ).= admm!(vec(model.Λ), prox_f!, prox_g!, λ=λ, ϵ_abs=1e-4, ϵ_rel=1e-3)
 
     return nothing
 end

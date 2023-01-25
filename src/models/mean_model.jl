@@ -149,21 +149,25 @@ function update_mean!(
     Ω= prec(error)
     
     # linear coefficient b
-    b= -inv(prod(size(model.μ))) * vec(Ω * resid(error) * transpose(model.X))
-    # I + A, with A quadratic coefficient
-    tmp= inv(prod(size(model.μ))) * kron(model.X * transpose(model.X), Ω)
-    @inbounds @fastmath for i ∈ axes(tmp,1)
-        tmp[i,i]+= one(eltype(tmp))
+    b= -vec(Ω * resid(error) * transpose(model.X))
+    # quadratic coefficient A
+    A= kron(model.X * transpose(model.X), Ω)
+    # scaling factor (lipschitz constant)
+    λ= inv(opnorm(A))
+    # I + λA, with A quadratic coefficient
+    lmul!(λ, A)
+    @inbounds @fastmath for i ∈ axes(A,1)
+        A[i,i]+= one(eltype(A))
     end
     # Cholesky decomposition
-    C= cholesky!(Hermitian(tmp))
+    C= cholesky!(Hermitian(A))
 
     # Proximal operators
     prox_g!(x::AbstractVector, λ::Real)= prox!(x, λ, pen)
     prox_f!(x::AbstractVector, λ::Real)= shrinkage!(x, λ, C, b)
 
     # Penalized estimation via admm
-    vec(model.β).= admm!(vec(model.β), prox_f!, prox_g!)
+    vec(model.β).= admm!(vec(model.β), prox_f!, prox_g!, λ=λ, ϵ_abs=1e-4, ϵ_rel=1e-3)
 
     # mean
     mean!(model)

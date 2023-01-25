@@ -765,22 +765,18 @@ function update_error!(
     f(x::AbstractVector)= f_spatial(x, model, quad)
     ∇f!(∇f::AbstractVector, x::AbstractVector)=  ∇f_spatial!(∇f, x, model, quad)
 
-    # Warm start for proximal operator
-    y_prev= logit.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
-
     # Proximal operators
     prox_g!(x::AbstractVector, λ::Real)=    begin
                                                 x.= logistic.(x, offset=model.ρ_max, scale=2 * model.ρ_max)    
                                                 prox!(x, λ, pen)
                                                 x.= logit.(x, offset=model.ρ_max, scale=2 * model.ρ_max)
                                             end
-    prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, y_prev)
 
     # Transform parameters
     model.ρ.= logit.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
 
-    # Penalized estimation via admm
-    model.ρ.= admm!(model.ρ, prox_f!, prox_g!)
+    # Penalized estimation via proximal gradient method
+    prox_grad!(model.ρ, f, ∇f!, prox_g!, ϵ=1e-4)
 
     # Transform parameters back
     model.ρ.= logistic.(model.ρ; offset=model.ρ_max, scale=2 * model.ρ_max)
@@ -813,22 +809,18 @@ function update_error!(
     f(x::AbstractVector)= f_spatial(x, model, quad)
     ∇f!(∇f::AbstractVector, x::AbstractVector)=  ∇f_spatial!(∇f, x, model, quad)
 
-    # Warm start for proximal operator
-    y_prev= logit.(model.ρ, offset=1., scale=2.)
-
     # Proximal operators
     prox_g!(x::AbstractVector, λ::Real)=    begin
                                                 x.= logistic.(x, offset=1., scale=2.)    
                                                 prox!(x, λ, pen)
                                                 x.= logit.(x, offset=1., scale=2.)
                                             end
-    prox_f!(x::AbstractVector, λ::Real)= smooth!(x, λ, f, ∇f!, y_prev)
 
     # Transform parameters
     model.ρ.= logit.(model.ρ, offset=1., scale=2.)
 
-    # Penalized estimation via admm
-    model.ρ.= admm!(model.ρ, prox_f!, prox_g!)
+    # Penalized estimation via proximal gradient method
+    prox_grad!(model.ρ, f, ∇f!, prox_g!, ϵ=1e-4)
 
     # Transform parameters back
     model.ρ.= logistic.(model.ρ, offset=1., scale=2.)
