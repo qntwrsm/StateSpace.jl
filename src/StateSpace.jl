@@ -33,7 +33,8 @@ export
 	LinearTimeVariant,
 	# penalization
 	NoPen,
-	Lasso, 
+	Lasso,
+    GenLasso, 
 	GroupLasso,
 	SparseGroupLasso,
 	# models
