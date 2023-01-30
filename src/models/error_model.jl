@@ -810,7 +810,7 @@ function update_error!(
     y_prev = logit.(model.ρ, offset=model.ρ_max, scale=2*model.ρ_max)
 
     # Proximal operators
-    prox_g!(x::AbstractVector, λ::Real) =    begin
+    prox_g!(x::AbstractVector, λ::Real) =   begin
                                                 x .= logistic.(x, offset=model.ρ_max, scale=2*model.ρ_max)    
                                                 prox!(x, λ, pen)
                                                 x .= logit.(x, offset=model.ρ_max, scale=2*model.ρ_max)
@@ -886,6 +886,64 @@ function update_error!(
     # variance and precision
     cov(model).data.= model.G * cov(model.error) * transpose(model.G)
     prec(model).= cov(model)
+    LinearAlgebra.inv!(cholesky!(prec(model)))
+
+    return nothing
+end
+function update_error!(
+    model::SpatialMovingAverageModel, 
+    quad::AbstractMatrix, 
+    pen::GenLasso
+)
+    # inverse
+    Ginv = inv(model.G)
+
+    # idiosyncratic components
+    mul!(resid(model.error), Ginv, resid(model))
+    quad_spat = Ginv * quad * transpose(Ginv)
+    update_error!(model.error, quad_spat, pen)
+
+    # Spatial dependence
+    # Closure of functions
+    f(x::AbstractVector) = f_spatial(x, model, quad)
+    ∇f!(∇f::AbstractVector, x::AbstractVector) = ∇f_spatial!(∇f, x, model, quad)
+
+    # Warm start for proximal operator
+    y_prev = logit.(model.ρ, offset=model.ρ_max, scale=2*model.ρ_max)
+
+    # Proximal operators
+    prox_g!(x::AbstractVector, λ::Real) =   begin
+                                                x .= logistic.(x, offset=1., scale=2.)    
+                                                prox!(x, λ, pen)
+                                                x .= logit.(x, offset=1., scale=2.)
+                                            end
+    prox_f!(x::AbstractVector, λ::Real) = smooth!(x, λ, f, ∇f!, y_prev)
+
+    # Transform parameters
+    model.ρ .= logit.(model.ρ, offset=1., scale=2.)
+
+    # gradient at ρ
+    ∇f = similar(model.ρ)
+    ∇f!(∇f, model.ρ)
+    # gradient at ρ + ϵ
+    ρ_ϵ = model.ρ .+ one(eltype(model.ρ))
+    ∇f_ϵ = similar(ρ_ϵ)
+    ∇f!(∇f_ϵ, ρ_ϵ)
+    # Lipschitz constant
+    L = norm(∇f_ϵ .- ∇f) * inv(√length(model.ρ))
+
+    # Penalized estimation via linearized ADMM
+    _ = ladmm!(model.ρ, prox_f!, prox_g!, pen.D, λ=inv(L), ϵ_abs=1e-4, ϵ_rel=1e-3)
+
+    # Transform parameters back
+    model.ρ .= logistic.(model.ρ, offset=1., scale=2.)
+
+    # Spatial lag polynomial G
+    spatial_ma_polynomial!(model.G, model.ρ, model.W, model.groups)
+
+    # variance and precision
+    cov(model).data .= model.G * cov(model.error) * transpose(model.G)
+    prec(model) .= cov(model)
     LinearAlgebra.inv!(cholesky!(prec(model)))
 
     return nothing
