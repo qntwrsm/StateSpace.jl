@@ -33,6 +33,12 @@ mutable struct Lasso{Tγ, Tw} <: Penalization
 	weights::Tw	# weights
 end
 
+mutable struct GenLasso{Tγ, Tw, TD} <: Penalization
+	γ::Tγ		# penalization strength
+	weights::Tw	# weights
+    D::TD       # penalty matrix
+end
+
 mutable struct GroupLasso{Tγ, Tw, Tg} <: Penalization
 	γ::Tγ		# penalization strength
 	weights::Tw	# weights
