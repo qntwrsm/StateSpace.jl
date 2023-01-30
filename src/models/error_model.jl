@@ -812,7 +812,7 @@ function update_error!(
     # Proximal operators
     prox_g!(x::AbstractVector, λ::Real) =   begin
                                                 x .= logistic.(x, offset=model.ρ_max, scale=2*model.ρ_max)    
-                                                prox!(x, λ, pen)
+                                                x .= soft_thresh.(x, λ .* pen.γ .* vec(pen.weights))
                                                 x .= logit.(x, offset=model.ρ_max, scale=2*model.ρ_max)
                                             end
     prox_f!(x::AbstractVector, λ::Real) = smooth!(x, λ, f, ∇f!, y_prev)
@@ -914,7 +914,7 @@ function update_error!(
     # Proximal operators
     prox_g!(x::AbstractVector, λ::Real) =   begin
                                                 x .= logistic.(x, offset=1., scale=2.)    
-                                                prox!(x, λ, pen)
+                                                x .= soft_thresh.(x, λ .* pen.γ .* vec(pen.weights))
                                                 x .= logit.(x, offset=1., scale=2.)
                                             end
     prox_f!(x::AbstractVector, λ::Real) = smooth!(x, λ, f, ∇f!, y_prev)
